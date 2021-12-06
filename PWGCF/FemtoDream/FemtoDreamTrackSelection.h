@@ -12,6 +12,7 @@
 /// \file FemtoDreamTrackCuts.h
 /// \brief Definition of the FemtoDreamTrackCuts
 /// \author Andi Mathis, TU München, andreas.mathis@ph.tum.de
+/// \author Luca Barioglio, TU München, luca.barioglio@cern.ch
 
 #ifndef ANALYSIS_TASKS_PWGCF_FEMTODREAM_FEMTODREAMTRACKSELECTION_H_
 #define ANALYSIS_TASKS_PWGCF_FEMTODREAM_FEMTODREAMTRACKSELECTION_H_
@@ -43,6 +44,12 @@ enum TrackSel { kSign,        ///< Sign of the track
                 kDCAMin,      ///< Min. DCA_xyz (cm)
                 kPIDnSigmaMax ///< Max. |n_sigma| for PID
 };
+
+enum TrackContainerPosition {
+  kCuts,
+  kPID
+}; /// Position in the full track cut container
+
 } // namespace femtoDreamTrackSelection
 
 /// \class FemtoDreamTrackCuts
@@ -87,7 +94,7 @@ class FemtoDreamTrackSelection : public FemtoDreamObjectSelection<float, femtoDr
   void setPIDSpecies(T& pids)
   {
     std::vector<int> tmpPids = pids; /// necessary due to some features of the configurable
-    for (const o2::track::PID& pid : tmpPids) {
+    for (o2::track::PID pid : tmpPids) {
       mPIDspecies.push_back(pid);
     }
   }
@@ -143,6 +150,27 @@ class FemtoDreamTrackSelection : public FemtoDreamObjectSelection<float, femtoDr
     return outString;
   }
 
+  /// Helper function to obtain the index of a given selection variable for consistent naming of the configurables
+  /// \param obs Track selection variable (together with prefix) got from file
+  /// \param prefix Additional prefix for the output of the configurable
+  static int findSelectionIndex(const std::string_view& obs, std::string_view prefix = "")
+  {
+    for (int index = 0; index < kNtrackSelection; index++) {
+      std::string_view cmp{static_cast<std::string>(prefix) + static_cast<std::string>(mSelectionNames[index])};
+      if (obs.compare(cmp) == 0)
+        return index;
+    }
+    LOGF(info, "Variable %s not found", obs);
+    return -1;
+  }
+
+  /// Helper function to obtain the type of a given selection variable for consistent naming of the configurables
+  /// \param iSel Track selection variable whose type is returned
+  static femtoDreamSelection::SelectionType getSelectionType(femtoDreamTrackSelection::TrackSel iSel)
+  {
+    return mSelectionTypes[iSel];
+  }
+
   /// Helper function to obtain the helper string of a given selection criterion for consistent description of the configurables
   /// \param iSel Track selection variable to be examined
   /// \param prefix Additional prefix for the output of the configurable
@@ -177,31 +205,46 @@ class FemtoDreamTrackSelection : public FemtoDreamObjectSelection<float, femtoDr
   float dcaMin;
   float nSigmaPIDMax;
   std::vector<o2::track::PID> mPIDspecies; ///< All the particle species for which the n_sigma values need to be stored
-  static constexpr std::string_view mSelectionNames[12] = {"Sign",
-                                                           "PtMin",
-                                                           "PtMax",
-                                                           "EtaMax",
-                                                           "TPCnClsMin",
-                                                           "TPCfClsMin",
-                                                           "TPCcRowsMin",
-                                                           "TPCsClsMax",
-                                                           "DCAxyMax",
-                                                           "DCAzMax",
-                                                           "DCAMin",
-                                                           "PIDnSigmaMax"}; ///< Name of the different selections
-  static constexpr std::string_view mSelectionHelper[12] = {"Sign of the track",
-                                                            "Minimal pT (GeV/c)",
-                                                            "Maximal pT (GeV/c)",
-                                                            "Maximal eta",
-                                                            "Minimum number of TPC clusters",
-                                                            "Minimum fraction of crossed rows/findable clusters",
-                                                            "Minimum number of crossed TPC rows",
-                                                            "Maximal number of shared TPC cluster",
-                                                            "Maximal DCA_xy (cm)",
-                                                            "Maximal DCA_z (cm)",
-                                                            "Minimal DCA (cm)",
-                                                            "Maximal PID (nSigma)"}; ///< Helper information for the different selections
-};                                                                                   // namespace femtoDream
+  static constexpr int kNtrackSelection = 12;
+  static constexpr std::string_view mSelectionNames[kNtrackSelection] = {"Sign",
+                                                                         "PtMin",
+                                                                         "PtMax",
+                                                                         "EtaMax",
+                                                                         "TPCnClsMin",
+                                                                         "TPCfClsMin",
+                                                                         "TPCcRowsMin",
+                                                                         "TPCsClsMax",
+                                                                         "DCAxyMax",
+                                                                         "DCAzMax",
+                                                                         "DCAMin",
+                                                                         "PIDnSigmaMax"}; ///< Name of the different selections
+
+  static constexpr femtoDreamSelection::SelectionType mSelectionTypes[kNtrackSelection]{femtoDreamSelection::kEqual,
+                                                                                        femtoDreamSelection::kLowerLimit,
+                                                                                        femtoDreamSelection::kUpperLimit,
+                                                                                        femtoDreamSelection::kAbsUpperLimit,
+                                                                                        femtoDreamSelection::kLowerLimit,
+                                                                                        femtoDreamSelection::kLowerLimit,
+                                                                                        femtoDreamSelection::kLowerLimit,
+                                                                                        femtoDreamSelection::kUpperLimit,
+                                                                                        femtoDreamSelection::kAbsUpperLimit,
+                                                                                        femtoDreamSelection::kAbsUpperLimit,
+                                                                                        femtoDreamSelection::kAbsUpperLimit,
+                                                                                        femtoDreamSelection::kAbsUpperLimit}; ///< Map to match a variable with its type
+
+  static constexpr std::string_view mSelectionHelper[kNtrackSelection] = {"Sign of the track",
+                                                                          "Minimal pT (GeV/c)",
+                                                                          "Maximal pT (GeV/c)",
+                                                                          "Maximal eta",
+                                                                          "Minimum number of TPC clusters",
+                                                                          "Minimum fraction of crossed rows/findable clusters",
+                                                                          "Minimum number of crossed TPC rows",
+                                                                          "Maximal number of shared TPC cluster",
+                                                                          "Maximal DCA_xy (cm)",
+                                                                          "Maximal DCA_z (cm)",
+                                                                          "Minimal DCA (cm)",
+                                                                          "Maximal PID (nSigma)"}; ///< Helper information for the different selections
+};                                                                                                 // namespace femtoDream
 
 template <o2::aod::femtodreamparticle::ParticleType part, typename cutContainerType>
 void FemtoDreamTrackSelection::init(HistogramRegistry* registry, const std::string WhichDaugh)
@@ -217,21 +260,21 @@ void FemtoDreamTrackSelection::init(HistogramRegistry* registry, const std::stri
       folderName = static_cast<std::string>(o2::aod::femtodreamparticle::ParticleTypeName[part]) + "/" + WhichDaugh;
     }
 
-    /// \todo this should be an automatic check in the parent class
-    int nSelections = getNSelections() + mPIDspecies.size() * (getNSelections(femtoDreamTrackSelection::kPIDnSigmaMax) - 1);
-    if (8 * sizeof(cutContainerType) < nSelections) {
-      LOG(fatal) << "FemtoDreamTrackCuts: Number of selections to large for your container - quitting!";
+    /// check whether the number of selection exceeds the bitmap size
+    unsigned int nSelections = getNSelections() - getNSelections(femtoDreamTrackSelection::kPIDnSigmaMax);
+    if (nSelections > 8 * sizeof(cutContainerType)) {
+      LOG(fatal) << "FemtoDreamTrackCuts: Number of selections too large for your container - quitting!";
     }
 
-    mHistogramRegistry->add((folderName + "/pThist").c_str(), "; #it{p}_{T} (GeV/#it{c}); Entries", kTH1F, {{1000, 0, 10}});
-    mHistogramRegistry->add((folderName + "/etahist").c_str(), "; #eta; Entries", kTH1F, {{1000, -1, 1}});
-    mHistogramRegistry->add((folderName + "/phihist").c_str(), "; #phi; Entries", kTH1F, {{1000, 0, 2. * M_PI}});
+    mHistogramRegistry->add((folderName + "/pThist").c_str(), "; #it{p}_{T} (GeV/#it{c}); Entries", kTH1F, {{240, 0, 6}});
+    mHistogramRegistry->add((folderName + "/etahist").c_str(), "; #eta; Entries", kTH1F, {{200, -1.5, 1.5}});
+    mHistogramRegistry->add((folderName + "/phihist").c_str(), "; #phi; Entries", kTH1F, {{200, 0, 2. * M_PI}});
     mHistogramRegistry->add((folderName + "/tpcnclshist").c_str(), "; TPC Cluster; Entries", kTH1F, {{163, 0, 163}});
     mHistogramRegistry->add((folderName + "/tpcfclshist").c_str(), "; TPC ratio findable; Entries", kTH1F, {{100, 0.5, 1.5}});
     mHistogramRegistry->add((folderName + "/tpcnrowshist").c_str(), "; TPC crossed rows; Entries", kTH1F, {{163, 0, 163}});
     mHistogramRegistry->add((folderName + "/tpcnsharedhist").c_str(), "; TPC shared clusters; Entries", kTH1F, {{163, 0, 163}});
-    mHistogramRegistry->add((folderName + "/dcaXYhist").c_str(), "; #it{p}_{T} (GeV/#it{c}); DCA_{xy} (cm)", kTH2F, {{100, 0, 10}, {301, -1.5, 1.5}});
-    mHistogramRegistry->add((folderName + "/dcaZhist").c_str(), "; #it{p}_{T} (GeV/#it{c}); DCA_{z} (cm)", kTH2F, {{100, 0, 10}, {301, -1.5, 1.5}});
+    mHistogramRegistry->add((folderName + "/dcaXYhist").c_str(), "; #it{p}_{T} (GeV/#it{c}); DCA_{xy} (cm)", kTH2F, {{100, 0, 10}, {500, -5, 5}});
+    mHistogramRegistry->add((folderName + "/dcaZhist").c_str(), "; #it{p}_{T} (GeV/#it{c}); DCA_{z} (cm)", kTH2F, {{100, 0, 10}, {500, -5, 5}});
     mHistogramRegistry->add((folderName + "/dcahist").c_str(), "; #it{p}_{T} (GeV/#it{c}); DCA (cm)", kTH1F, {{301, 0., 1.5}});
     mHistogramRegistry->add((folderName + "/tpcdEdx").c_str(), "; #it{p} (GeV/#it{c}); TPC Signal", kTH2F, {{100, 0, 10}, {1000, 0, 1000}});
     mHistogramRegistry->add((folderName + "/tofSignal").c_str(), "; #it{p} (GeV/#it{c}); TOF Signal", kTH2F, {{100, 0, 10}, {1000, 0, 100e3}});
@@ -413,7 +456,7 @@ std::array<cutContainerType, 2> FemtoDreamTrackSelection::getCutContainer(T cons
     pidTOF.push_back(getNsigmaTOF(track, it));
   }
 
-  float observable;
+  float observable = 0.;
   for (auto& sel : mSelections) {
     const auto selVariable = sel.getSelectionVariable();
     if (selVariable == femtoDreamTrackSelection::kPIDnSigmaMax) {

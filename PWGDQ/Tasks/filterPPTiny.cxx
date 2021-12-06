@@ -155,8 +155,8 @@ struct DQBarrelTrackSelectionTask {
     fHistMan->SetDefaultVarNames(VarManager::fgVariableNames, VarManager::fgVariableUnits);
 
     TString cutNames = "TrackBarrel_BeforeCuts;";
-    for (int i = 0; i < fTrackCuts.size(); i++) {
-      cutNames += Form("TrackBarrel_%s;", fTrackCuts[i].GetName());
+    for (auto& cut : fTrackCuts) {
+      cutNames += Form("TrackBarrel_%s;", cut.GetName());
     }
 
     DefineHistograms(fHistMan, cutNames.Data());     // define all histograms
@@ -298,7 +298,7 @@ struct DQFilterPPTaskTiny {
           if (!cutFilter) { // the tracks must have at least one filter bit in common to continue
             continue;
           }
-          VarManager::FillPair<pairType>(tpos, tneg, fValues); // compute pair quantities
+          VarManager::FillPair<pairType, gkTrackFillMap>(tpos, tneg, fValues); // compute pair quantities
           for (int i = 0; i < fNTrackCuts; ++i) {
             if (!(cutFilter & (uint8_t(1) << i))) {
               continue;
@@ -363,7 +363,7 @@ void DefineHistograms(HistogramManager* histMan, TString histClasses)
     }
 
     if (classStr.Contains("Pairs")) {
-      dqhistograms::DefineHistograms(histMan, objArray->At(iclass)->GetName(), "pair");
+      dqhistograms::DefineHistograms(histMan, objArray->At(iclass)->GetName(), "pair_barrel", "vertexing-barrel");
     }
   }
 }

@@ -13,12 +13,6 @@
 using namespace o2;
 using namespace o2::framework;
 
-// custom configurable for switching between run2 and run3 selection types
-void customize(std::vector<ConfigParamSpec>& workflowOptions)
-{
-  workflowOptions.push_back(ConfigParamSpec{"selection-run", VariantType::Int, 2, {"selection type: 2 - run 2, 3 - run 3"}});
-}
-
 #include "Framework/runDataProcessing.h"
 #include "Framework/AnalysisTask.h"
 #include "Framework/AnalysisDataModel.h"
@@ -88,6 +82,10 @@ struct EvSelParameters {
   bool applySelection[kNsel] = {0};
 };
 
+using BCsWithRun2InfosTimestampsAndMatches = soa::Join<aod::BCs, aod::Run2BCInfos, aod::Timestamps, aod::Run2MatchedToBCSparse>;
+using BCsWithRun3Matchings = soa::Join<aod::BCs, aod::Timestamps, aod::Run3MatchedToBCSparse>;
+using BCsWithBcSels = soa::Join<aod::BCs, aod::BcSels>;
+
 struct BcSelectionTask {
   Produces<aod::BcSels> bcsel;
   Service<o2::ccdb::BasicCCDBManager> ccdb;
@@ -99,9 +97,7 @@ struct BcSelectionTask {
     ccdb->setLocalObjectValidityChecking();
   }
 
-  using BCsWithRun2InfosTimestampsAndMatches = soa::Join<aod::BCs, aod::Run2BCInfos, aod::Timestamps, aod::Run2MatchedToBCSparse>;
-
-  void process(
+  void processRun2(
     BCsWithRun2InfosTimestampsAndMatches const& bcs,
     aod::Zdcs const&,
     aod::FV0As const&,
@@ -211,26 +207,23 @@ struct BcSelectionTask {
       selection[kNoPileupFromSPD] = (eventCuts & 1 << aod::kIsPileupFromSPD) == 0;
       selection[kNoV0PFPileup] = (eventCuts & 1 << aod::kIsV0PFPileup) == 0;
 
-      int64_t foundFT0 = bc.has_ft0() ? bc.ft0().globalIndex() : -1;
+      int32_t foundFT0 = bc.has_ft0() ? bc.ft0().globalIndex() : -1;
+      int32_t foundFV0 = bc.has_fv0a() ? bc.fv0a().globalIndex() : -1;
 
       // Fill bc selection columns
       bcsel(alias, selection,
             bbV0A, bbV0C, bgV0A, bgV0C,
             bbFDA, bbFDC, bgFDA, bgFDC,
-            multRingV0A, multRingV0C, spdClusters, foundFT0);
+            multRingV0A, multRingV0C, spdClusters, foundFT0, foundFV0);
     }
   }
-};
+  PROCESS_SWITCH(BcSelectionTask, processRun2, "Process Run2 event selection", true);
 
-struct BcSelectionTaskRun3 {
-  Produces<aod::BcSels> bcsel;
-  EvSelParameters par;
-  using BCsWithMatchings = soa::Join<aod::BCs, aod::Run3MatchedToBCSparse>;
-  void process(BCsWithMatchings const& bcs,
-               aod::Zdcs const&,
-               aod::FV0As const&,
-               aod::FT0s const&,
-               aod::FDDs const&)
+  void processRun3(BCsWithRun3Matchings const& bcs,
+                   aod::Zdcs const&,
+                   aod::FV0As const&,
+                   aod::FT0s const&,
+                   aod::FDDs const&)
   {
     for (auto& bc : bcs) {
       // TODO: fill fired aliases for run3
@@ -283,23 +276,24 @@ struct BcSelectionTaskRun3 {
 
       uint32_t spdClusters = 0;
 
-      int64_t foundFT0 = bc.has_ft0() ? bc.ft0().globalIndex() : -1;
-      LOGP(INFO, "foundFT0={}\n", foundFT0);
+      int32_t foundFT0 = bc.has_ft0() ? bc.ft0().globalIndex() : -1;
+      int32_t foundFV0 = bc.has_fv0a() ? bc.fv0a().globalIndex() : -1;
+      LOGP(debug, "foundFT0={}\n", foundFT0);
       // Fill bc selection columns
       bcsel(alias, selection,
             bbV0A, bbV0C, bgV0A, bgV0C,
             bbFDA, bbFDC, bgFDA, bgFDC,
-            multRingV0A, multRingV0C, spdClusters, foundFT0);
+            multRingV0A, multRingV0C, spdClusters, foundFT0, foundFV0);
     }
   }
+  PROCESS_SWITCH(BcSelectionTask, processRun3, "Process Run3 event selection", false);
 };
-
-using BCsWithBcSels = soa::Join<aod::BCs, aod::BcSels>;
 
 struct EventSelectionTask {
   Produces<aod::EvSels> evsel;
   Configurable<std::string> syst{"syst", "PbPb", "pp, pPb, Pbp, PbPb, XeXe"}; // TODO determine from AOD metadata or from CCDB
   Configurable<int> muonSelection{"muonSelection", 0, "0 - barrel, 1 - muon selection with pileup cuts, 2 - muon selection without pileup cuts"};
+  Configurable<int> customDeltaBC{"customDeltaBC", 300, "custom BC delta for FIT-collision matching"};
   Configurable<bool> isMC{"isMC", 0, "0 - data, 1 - MC"};
   Partition<aod::Tracks> tracklets = (aod::track::trackType == static_cast<uint8_t>(o2::aod::track::TrackTypeEnum::Run2Tracklet));
   EvSelParameters par;
@@ -371,10 +365,11 @@ struct EventSelectionTask {
     }
   }
 
-  void process(aod::Collision const& col, BCsWithBcSels const& bcs, aod::Tracks const& tracks)
+  void processRun2(aod::Collision const& col, BCsWithBcSels const& bcs, aod::Tracks const& tracks)
   {
     auto bc = col.bc_as<BCsWithBcSels>();
-    int64_t foundFT0 = bc.foundFT0();
+    int32_t foundFT0 = bc.foundFT0();
+    int32_t foundFV0 = bc.foundFV0();
 
     // copy alias decisions from bcsel table
     int32_t alias[kNaliases];
@@ -430,26 +425,27 @@ struct EventSelectionTask {
           bbV0A, bbV0C, bgV0A, bgV0C,
           bbFDA, bbFDC, bgFDA, bgFDC,
           multRingV0A, multRingV0C, spdClusters, nTkl, sel7, sel8,
-          foundFT0);
+          foundFT0, foundFV0);
   }
-};
+  PROCESS_SWITCH(EventSelectionTask, processRun2, "Process Run2 event selection", true);
 
-struct EventSelectionTaskRun3 {
-  Produces<aod::EvSels> evsel;
-
-  void process(aod::Collision const& col, BCsWithBcSels const& bcs)
+  void processRun3(aod::Collision const& col, BCsWithBcSels const& bcs)
   {
     auto bc = col.bc_as<BCsWithBcSels>();
-    int64_t foundFT0 = bc.foundFT0();
+    uint64_t apprBC = bc.globalBC();
+    int64_t meanBC = apprBC - std::lround(col.collisionTime() / o2::constants::lhc::LHCBunchSpacingNS);
+    int64_t deltaBC = std::ceil(col.collisionTimeRes() / o2::constants::lhc::LHCBunchSpacingNS * 4);
+    // use custom delta
+    if (customDeltaBC > 0) {
+      deltaBC = customDeltaBC;
+    }
 
+    int32_t foundFT0 = bc.foundFT0();
     if (foundFT0 < 0) { // search in +/-4 sigma around meanBC
-      uint64_t apprBC = bc.globalBC();
-      uint64_t meanBC = apprBC - std::lround(col.collisionTime() / o2::constants::lhc::LHCBunchSpacingNS);
-      int64_t deltaBC = std::ceil(col.collisionTimeRes() / o2::constants::lhc::LHCBunchSpacingNS * 4);
       // search forward
       int forwardMoveCount = 0;
       int64_t forwardBcDist = deltaBC + 1;
-      for (; bc != bcs.end() && bc.globalBC() - meanBC <= deltaBC; ++bc, ++forwardMoveCount) {
+      for (; bc != bcs.end() && int64_t(bc.globalBC()) <= meanBC + deltaBC; ++bc, ++forwardMoveCount) {
         if (bc.foundFT0() >= 0) {
           forwardBcDist = bc.globalBC() - meanBC;
           break;
@@ -459,19 +455,25 @@ struct EventSelectionTaskRun3 {
       // search backward
       int backwardMoveCount = 0;
       int64_t backwardBcDist = deltaBC + 1;
-      for (; bc != bcs.begin() && bc.globalBC() - meanBC >= -deltaBC; --bc, --backwardMoveCount) {
+      for (; int64_t(bc.globalBC()) >= meanBC - deltaBC; --bc, ++backwardMoveCount) {
         if (bc.foundFT0() >= 0) {
           backwardBcDist = meanBC - bc.globalBC();
           break;
         }
+        if (bc == bcs.begin()) {
+          break;
+        }
       }
       if (forwardBcDist > deltaBC && backwardBcDist > deltaBC) {
-        bc.moveByIndex(-backwardMoveCount); // return to nominal bc if neighbouring ft0 is not found
+        bc.moveByIndex(backwardMoveCount); // return to nominal bc if neighbouring ft0 is not found
       } else if (forwardBcDist < backwardBcDist) {
-        bc.moveByIndex(-backwardMoveCount + forwardMoveCount); // move forward
-      }
+        bc.moveByIndex(backwardMoveCount + forwardMoveCount); // move forward
+      }                                                       // else keep backward bc
     }
-    LOGP(INFO, "{}", bc.foundFT0());
+    foundFT0 = bc.foundFT0();
+
+    int32_t foundFV0 = bc.foundFV0();
+    LOGP(debug, "foundFT0 = {}", foundFT0);
 
     // copy alias decisions from bcsel table
     int32_t alias[kNaliases];
@@ -520,19 +522,14 @@ struct EventSelectionTaskRun3 {
           bbV0A, bbV0C, bgV0A, bgV0C,
           bbFDA, bbFDC, bgFDA, bgFDC,
           multRingV0A, multRingV0C, spdClusters, nTkl, sel7, sel8,
-          foundFT0);
+          foundFT0, foundFV0);
   }
+  PROCESS_SWITCH(EventSelectionTask, processRun3, "Process Run3 event selection", false);
 };
 
 WorkflowSpec defineDataProcessing(ConfigContext const& cfgc)
 {
-  if (cfgc.options().get<int>("selection-run") == 2 || cfgc.options().get<int>("selection-run") == 0) {
-    return WorkflowSpec{
-      adaptAnalysisTask<BcSelectionTask>(cfgc),
-      adaptAnalysisTask<EventSelectionTask>(cfgc)};
-  } else {
-    return WorkflowSpec{
-      adaptAnalysisTask<BcSelectionTaskRun3>(cfgc),
-      adaptAnalysisTask<EventSelectionTaskRun3>(cfgc)};
-  }
+  return WorkflowSpec{
+    adaptAnalysisTask<BcSelectionTask>(cfgc),
+    adaptAnalysisTask<EventSelectionTask>(cfgc)};
 }

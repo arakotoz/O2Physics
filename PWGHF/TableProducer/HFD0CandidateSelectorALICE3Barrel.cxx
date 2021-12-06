@@ -171,7 +171,7 @@ struct HFD0CandidateSelectorALICE3Barrel {
     }
 
     // cut on daughter DCA - need to add secondary vertex constraint here
-    if (std::abs(trackPion.dcaPrim0()) > cuts->get(pTBin, "d0pi") || std::abs(trackKaon.dcaPrim0()) > cuts->get(pTBin, "d0K")) {
+    if (std::abs(trackPion.dcaXY()) > cuts->get(pTBin, "d0pi") || std::abs(trackKaon.dcaXY()) > cuts->get(pTBin, "d0K")) {
       return false;
     }
 
@@ -189,7 +189,7 @@ struct HFD0CandidateSelectorALICE3Barrel {
     return true;
   }
 
-  using Trks = soa::Join<aod::BigTracksPID, aod::Tracks, aod::RICHTracksIndex, aod::McTrackLabels, aod::TracksExtra>;
+  using Trks = soa::Join<aod::BigTracksPIDExtended, aod::RICHTracksIndex, aod::McTrackLabels>;
   void process(aod::HfCandProng2 const& candidates, Trks const& barreltracks, const aod::McParticles& mcParticles, const aod::RICHs&, const aod::FRICHs&)
   {
 
@@ -202,16 +202,16 @@ struct HFD0CandidateSelectorALICE3Barrel {
       int statusD0TOFPID = 0;
       int statusD0RICHPID = 0;
       int statusD0TOFplusRICHPID = 0;
-
+      int statusD0barTOFplusRICHPID = 0;
       if (!(candidate.hfflag() & 1 << DecayType::D0ToPiK)) {
-        hfSelD0CandidateALICE3Barrel(statusHFFlag, statusD0NoPID, statusD0PerfectPID, statusD0TOFPID, statusD0RICHPID, statusD0TOFplusRICHPID);
+        hfSelD0CandidateALICE3Barrel(statusHFFlag, statusD0NoPID, statusD0PerfectPID, statusD0TOFPID, statusD0RICHPID, statusD0TOFplusRICHPID, statusD0barTOFplusRICHPID);
         continue;
       }
       statusHFFlag = 1;
 
       // conjugate-independent topological selection
       if (!selectionTopol(candidate)) {
-        hfSelD0CandidateALICE3Barrel(statusHFFlag, statusD0NoPID, statusD0PerfectPID, statusD0TOFPID, statusD0RICHPID, statusD0TOFplusRICHPID);
+        hfSelD0CandidateALICE3Barrel(statusHFFlag, statusD0NoPID, statusD0PerfectPID, statusD0TOFPID, statusD0RICHPID, statusD0TOFplusRICHPID, statusD0barTOFplusRICHPID);
         continue;
       }
 
@@ -225,7 +225,7 @@ struct HFD0CandidateSelectorALICE3Barrel {
       bool topolD0bar = selectionTopolConjugate(candidate, trackNeg, trackPos);
 
       if (!topolD0 && !topolD0bar) {
-        hfSelD0CandidateALICE3Barrel(statusHFFlag, statusD0NoPID, statusD0PerfectPID, statusD0TOFPID, statusD0RICHPID, statusD0TOFplusRICHPID);
+        hfSelD0CandidateALICE3Barrel(statusHFFlag, statusD0NoPID, statusD0PerfectPID, statusD0TOFPID, statusD0RICHPID, statusD0TOFplusRICHPID, statusD0barTOFplusRICHPID);
         continue;
       }
 
@@ -238,32 +238,51 @@ struct HFD0CandidateSelectorALICE3Barrel {
       float nsigmaRICHNegKaon = -5000.0;
       float nsigmaTOFPosPion = -5000.0;
       float nsigmaRICHPosPion = -5000.0;
+      float nsigmaTOFNegPion = -5000.0;
+      float nsigmaRICHNegPion = -5000.0;
+      float nsigmaTOFPosKaon = -5000.0;
+      float nsigmaRICHPosKaon = -5000.0;
 
       if (trackPos.hasTOF()) {
         nsigmaTOFPosPion = trackPos.tofNSigmaPi();
+        nsigmaTOFPosKaon = trackPos.tofNSigmaKa();
       }
       if (trackNeg.hasTOF()) {
         nsigmaTOFNegKaon = trackNeg.tofNSigmaKa();
+        nsigmaTOFNegPion = trackNeg.tofNSigmaPi();
       }
       if (trackPos.has_rich()) {
         nsigmaRICHPosPion = trackPos.rich().richNsigmaPi();
+        nsigmaRICHPosKaon = trackPos.rich().richNsigmaKa();
         //std::cout << "barrel= " << trackPos.eta() << "\n";
       }
       if (trackNeg.has_rich()) {
         nsigmaRICHNegKaon = trackNeg.rich().richNsigmaKa();
+        nsigmaRICHNegPion = trackNeg.rich().richNsigmaPi();
       }
 
-      bool selectPionTOFplusRICH = false;
-      bool selectKaonTOFplusRICH = false;
+      bool selectPosPionTOFplusRICH = false;
+      bool selectNegKaonTOFplusRICH = false;
+      bool selectNegPionTOFplusRICH = false;
+      bool selectPosKaonTOFplusRICH = false;
 
       if ((momentumPosTrack < 0.6 && std::abs(nsigmaTOFPosPion) < 3.0))
-        selectPionTOFplusRICH = true;
+        selectPosPionTOFplusRICH = true;
       if ((momentumPosTrack > 0.6 && trackPos.has_rich() && std::sqrt(nsigmaRICHPosPion * nsigmaRICHPosPion + nsigmaTOFPosPion * nsigmaTOFPosPion) < 3.0))
-        selectPionTOFplusRICH = true;
+        selectPosPionTOFplusRICH = true;
       if ((momentumNegTrack < 2.0 && std::abs(nsigmaTOFNegKaon) < 3.0))
-        selectKaonTOFplusRICH = true;
-      if ((momentumNegTrack > 0.6 && trackNeg.has_rich() && std::sqrt(nsigmaRICHNegKaon * nsigmaRICHNegKaon + nsigmaTOFNegKaon * nsigmaTOFNegKaon) < 3.0))
-        selectKaonTOFplusRICH = true;
+        selectNegKaonTOFplusRICH = true;
+      if ((momentumNegTrack > 2.0 && trackNeg.has_rich() && std::sqrt(nsigmaRICHNegKaon * nsigmaRICHNegKaon + nsigmaTOFNegKaon * nsigmaTOFNegKaon) < 3.0))
+        selectNegKaonTOFplusRICH = true;
+
+      if ((momentumNegTrack < 0.6 && std::abs(nsigmaTOFNegPion) < 3.0))
+        selectNegPionTOFplusRICH = true;
+      if ((momentumNegTrack > 0.6 && trackNeg.has_rich() && std::sqrt(nsigmaRICHNegPion * nsigmaRICHNegPion + nsigmaTOFNegPion * nsigmaTOFNegPion) < 3.0))
+        selectNegPionTOFplusRICH = true;
+      if ((momentumPosTrack < 2.0 && std::abs(nsigmaTOFPosKaon) < 3.0))
+        selectPosKaonTOFplusRICH = true;
+      if ((momentumPosTrack > 2.0 && trackPos.has_rich() && std::sqrt(nsigmaRICHPosKaon * nsigmaRICHPosKaon + nsigmaTOFPosKaon * nsigmaTOFPosKaon) < 3.0))
+        selectPosKaonTOFplusRICH = true;
 
       if (topolD0) {
         statusD0NoPID = 1;
@@ -273,10 +292,14 @@ struct HFD0CandidateSelectorALICE3Barrel {
           statusD0TOFPID = 1;
         if ((std::abs(nsigmaRICHPosPion) < 3.0 && std::abs(nsigmaRICHNegKaon) < 3.0))
           statusD0RICHPID = 1;
-        if (selectPionTOFplusRICH && selectKaonTOFplusRICH)
+        if (selectPosPionTOFplusRICH && selectNegKaonTOFplusRICH)
           statusD0TOFplusRICHPID = 1;
       }
-      hfSelD0CandidateALICE3Barrel(statusHFFlag, statusD0NoPID, statusD0PerfectPID, statusD0TOFPID, statusD0RICHPID, statusD0TOFplusRICHPID);
+      if (topolD0bar) {
+        if (selectNegPionTOFplusRICH && selectPosKaonTOFplusRICH)
+          statusD0barTOFplusRICHPID = 1;
+      }
+      hfSelD0CandidateALICE3Barrel(statusHFFlag, statusD0NoPID, statusD0PerfectPID, statusD0TOFPID, statusD0RICHPID, statusD0TOFplusRICHPID, statusD0barTOFplusRICHPID);
     }
   }
 };

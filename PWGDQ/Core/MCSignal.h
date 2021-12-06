@@ -97,11 +97,11 @@ class MCSignal : public TNamed
     return CheckMC(0, checkSources, mcStack, args...);
   };
 
-  void Print();
+  void PrintConfig();
 
  private:
   std::vector<MCProng> fProngs;
-  int fNProngs;
+  unsigned int fNProngs;
   std::vector<short> fCommonAncestorIdxs;
   int fTempAncestorLabel;
 
@@ -152,7 +152,7 @@ bool MCSignal::CheckProng(int i, bool checkSources, const U& mcStack, const T& t
     if (!currentMCParticle.has_mother0() && j < fProngs[i].fNGenerations - 1) {
       return false;
     }
-    if (j < fProngs[i].fNGenerations - 1) {
+    if (currentMCParticle.has_mother0() && j < fProngs[i].fNGenerations - 1) {
       currentMCParticle = mcStack.iteratorAt(currentMCParticle.mother0Id());
       //currentMCParticle = currentMCParticle.template mother0_as<U>();
     }

@@ -19,18 +19,39 @@ o2physics_add_dpl_workflow(task-d0
                     PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DetectorsVertexing
                     COMPONENT_NAME Analysis)
 
-o2physics_add_dpl_workflow(task-d0-ALICE3-Barrel-mc
+o2physics_add_dpl_workflow(task-d0-parametrized-pid-mc
+                    SOURCES taskD0parametrizedPID.cxx
+                    PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DetectorsVertexing
+                    COMPONENT_NAME Analysis)
+
+o2physics_add_dpl_workflow(task-d0-alice3-barrel-mc
                     SOURCES taskD0ALICE3Barrel.cxx
                     PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DetectorsVertexing
                     COMPONENT_NAME Analysis)
 
-o2physics_add_dpl_workflow(task-d0-ALICE3-Forward-mc
+o2physics_add_dpl_workflow(task-lc-alice3-mc
+                    SOURCES taskLcALICE3.cxx
+                    PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DetectorsVertexing
+                    COMPONENT_NAME Analysis)		  
+
+o2physics_add_dpl_workflow(task-d0-alice3-forward-mc
                     SOURCES taskD0ALICE3Forward.cxx
                     PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DetectorsVertexing
                     COMPONENT_NAME Analysis)
 
 o2physics_add_dpl_workflow(task-dplus
                     SOURCES taskDPlus.cxx
+                    PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DetectorsVertexing
+                    COMPONENT_NAME Analysis)
+
+
+o2physics_add_dpl_workflow(task-lc-parametrized-pid-mc
+                    SOURCES taskLcparametrizedPID.cxx
+                    PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DetectorsVertexing
+                    COMPONENT_NAME Analysis)
+		  
+o2physics_add_dpl_workflow(task-lc-centrality
+                    SOURCES taskLcCentrality.cxx
                     PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DetectorsVertexing
                     COMPONENT_NAME Analysis)
 
@@ -49,6 +70,11 @@ o2physics_add_dpl_workflow(task-bplus
                     PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DetectorsVertexing
                     COMPONENT_NAME Analysis)
 
+o2physics_add_dpl_workflow(task-lb
+                    SOURCES taskLb.cxx
+                    PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DetectorsVertexing
+                    COMPONENT_NAME Analysis)
+
 o2physics_add_dpl_workflow(task-xic
                     SOURCES taskXic.cxx
                     PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DetectorsVertexing
@@ -64,6 +90,11 @@ o2physics_add_dpl_workflow(task-x
                     PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DetectorsVertexing
                     COMPONENT_NAME Analysis)
 
+o2physics_add_dpl_workflow(task-chic
+                    SOURCES taskChic.cxx
+                    PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DetectorsVertexing
+                    COMPONENT_NAME Analysis)
+
 o2physics_add_dpl_workflow(mc-validation
                     SOURCES HFMCValidation.cxx
                     PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DetectorsVertexing
@@ -76,6 +107,11 @@ o2physics_add_dpl_workflow(task-lc-tok0sp
 
 o2physics_add_dpl_workflow(correlator-d0d0bar
                     SOURCES HFCorrelatorD0D0bar.cxx
+                    PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DetectorsVertexing
+                    COMPONENT_NAME Analysis)
+
+o2physics_add_dpl_workflow(correlator-d0d0bar-barrel-full-pid
+                    SOURCES HFCorrelatorD0D0barBarrelFullPID.cxx
                     PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DetectorsVertexing
                     COMPONENT_NAME Analysis)
 
