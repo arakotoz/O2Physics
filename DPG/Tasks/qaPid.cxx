@@ -355,7 +355,7 @@ struct pid {
     const float p = track.p();
 
     // list of Nsigmas for particles
-    float particleNSigma[arrLen];
+    float* particleNSigma = new float[arrLen];
 
     bool isPidFalse = false;
 
@@ -406,6 +406,7 @@ struct pid {
       double pt = track.pt();
       fillContaminationRegistry(i, PdgCode, pt);
     }
+    delete[] particleNSigma;
   }
 
   template <std::size_t i, typename T>
@@ -416,7 +417,7 @@ struct pid {
     bool isPidFalse = false;
 
     // list of Nsigmas for particles
-    float particleNSigma[arrLen];
+    float* particleNSigma = new float[arrLen];
 
     // calculate Nsigmas for every particle
     for (int j = 0; j < arrLen; ++j) {
@@ -474,6 +475,7 @@ struct pid {
         fillContaminationRegistry(i, PdgCode, pt);
       }
     }
+    delete[] particleNSigma;
   }
 
   void init(o2::framework::InitContext&)
