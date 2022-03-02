@@ -34,9 +34,9 @@ using namespace o2::soa;
 
 namespace
 {
-static constexpr int nCuts = 4;
-static const std::vector<std::string> cutNames{"MaxPt", "PIDthr", "nSigmaTPC", "nSigmaTPCTOF"};
-static const float cutsTable[1][nCuts] = {{4.05f, 0.75f, 3.5f, 3.5f}};
+static constexpr int nCuts = 5;
+static const std::vector<std::string> cutNames{"MaxPt", "PIDthr", "nSigmaTPC", "nSigmaTPCTOF", "MaxP"};
+static const float cutsTable[1][nCuts] = {{4.05f, 0.75f, 3.5f, 3.5f, 100.f}};
 
 static constexpr int nNsigma = 3;
 static constexpr float kNsigma[nNsigma] = {3.5f, 3.f, 2.5f};
@@ -66,7 +66,7 @@ struct femtoDreamDebugTrack {
   using FemtoFullTracks = soa::Join<aod::FemtoDreamParticles, aod::FemtoDreamDebugParticles>;
 
   Partition<FemtoFullTracks> partsOne = (aod::femtodreamparticle::partType == uint8_t(aod::femtodreamparticle::ParticleType::kTrack)) &&
-                                        (aod::femtodreamparticle::pt < cfgCutTable->get("MaxPt")) &&
+                                        // (aod::femtodreamparticle::pt < cfgCutTable->get("MaxPt")) &&
                                         ((aod::femtodreamparticle::cut & ConfCutPartOne) == ConfCutPartOne);
 
   /// Histogramming for Event
@@ -95,7 +95,7 @@ struct femtoDreamDebugTrack {
     FullQaRegistry.add("FullTrackQA/hTPCfindableVsCrossed", ";TPC findable clusters ; TPC crossed rows;", kTH2F, {{163, 0, 163}, {163, 0, 163}});
     FullQaRegistry.add("FullTrackQA/hTPCshared", "; TPC shared clusters; Entries", kTH1F, {{163, 0, 163}});
     FullQaRegistry.add("FullTrackQA/hITSclusters", "; ITS clusters; Entries", kTH1F, {{10, 0, 10}});
-    FullQaRegistry.add("FullTrackQA//hITSclustersIB", "; ITS clusters in IB; Entries", kTH1F, {{10, 0, 10}});
+    FullQaRegistry.add("FullTrackQA/hITSclustersIB", "; ITS clusters in IB; Entries", kTH1F, {{10, 0, 10}});
     FullQaRegistry.add("FullTrackQA/hDCAxy", "; #it{p}_{T} (GeV/#it{c}); DCA_{xy} (cm)", kTH2F, {{20, 0.5, 4.05}, {500, -5, 5}});
     FullQaRegistry.add("FullTrackQA/hDCAz", "; #it{p}_{T} (GeV/#it{c}); DCA_{z} (cm)", kTH2F, {{100, 0, 10}, {500, -5, 5}});
     FullQaRegistry.add("FullTrackQA/hDCA", "; #it{p}_{T} (GeV/#it{c}); DCA (cm)", kTH2F, {{100, 0, 10}, {301, 0., 1.5}});
@@ -205,7 +205,9 @@ struct femtoDreamDebugTrack {
     eventHisto.fillQA(col);
 
     for (auto& part : groupPartsOne) {
-
+      if (part.p() > cfgCutTable->get("MaxP") || part.pt() > cfgCutTable->get("MaxPt")) {
+        continue;
+      }
       if (!isFullPIDSelected(part.pidcut(), part.p(), cfgCutTable->get("PIDthr"), vPIDPartOne, cfgCutTable->get("nSigmaTPC"), cfgCutTable->get("nSigmaTPCTOF"))) {
         continue;
       }
