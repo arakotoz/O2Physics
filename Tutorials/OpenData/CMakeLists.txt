@@ -9,17 +9,8 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-o2physics_add_executable(aod-data-model-graph
-                  SOURCES aodDataModelGraph.cxx
-                  PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore
-                 )
 
-o2physics_add_executable(pidparam-tof-reso
-                  SOURCES handleParamTOFReso.cxx
+o2physics_add_dpl_workflow(flow-analysis
+                  SOURCES flowAnalysis.cxx
                   PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore
-                 )
-
-o2physics_add_executable(pidparam-tpc-response
-                  SOURCES handleParamTPCResponse.cxx
-                  PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore
-                 )
+                  COMPONENT_NAME AnalysisTutorial)
