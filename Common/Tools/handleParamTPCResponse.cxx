@@ -14,53 +14,53 @@
 /// \author Jeremy Wilkinson
 /// \brief exec for writing and reading Response object
 
-#include "CCDB/CcdbApi.h"
-#include <boost/program_options.hpp>
-#include <FairLogger.h>
 #include <array>
 #include <fstream>
 #include <sstream>
 #include "TFile.h"
-#include "Common/Core/PID/PIDResponse.h"
 #include "Common/Core/PID/TPCPIDResponse.h"
+#include "handleParamBase.h"
 #include "Algorithm/RangeTokenizer.h"
 using namespace o2::pid::tpc;
-namespace bpo = boost::program_options;
 
-bool initOptionsAndParse(bpo::options_description& options, int argc, char* argv[], bpo::variables_map& vm)
+bool initOptionsAndParse(bpo::options_description& options, int argc, char* argv[])
 {
   options.add_options()(
-    "url,u", bpo::value<std::string>()->default_value("http://alice-ccdb.cern.ch"), "URL of the CCDB database")(
-    "ccdb-path,c", bpo::value<std::string>()->default_value("Analysis/PID/TPC"), "CCDB path to TPC directory")(
-    "start,s", bpo::value<long>()->default_value(0), "Start timestamp for calibration validity")(
-    "stop,S", bpo::value<long>()->default_value(4108971600000), "End timestamp for calibration validity")(
-    "delete-previous", bpo::value<int>()->default_value(0), "delete previous entry from CCDB (1 = true)")(
+    "url,u", bpo::value<std::string>()->default_value("http://alice-ccdb.cern.ch"), "URL of the CCDB database e.g. http://ccdb-test.cern.ch:8080 or http://alice-ccdb.cern.ch")(
+    "ccdb-path,c", bpo::value<std::string>()->default_value("Analysis/PID/TPC"), "CCDB path for storage/retrieval")(
+    "rct-path", bpo::value<std::string>()->default_value("RCT/RunInformation"), "path to the ccdb RCT objects for the SOR/EOR timestamps")(
+    "start,s", bpo::value<long>()->default_value(0), "Start timestamp of object validity. If 0 and runnumber != 0 it will be set to the run SOR")(
+    "stop,S", bpo::value<long>()->default_value(0), "Stop timestamp of object validity. If 0 and runnumber != 0 it will be set to the run EOR")(
+    "timestamp,T", bpo::value<long>()->default_value(-1), "Timestamp of the object to retrieve, used in alternative to the run number")(
+    "runnumber,R", bpo::value<unsigned int>()->default_value(0), "Timestamp of the object to retrieve, used in alternative to the timestamp (if 0 using the timestamp)")(
+    "delete-previous,delete_previous,d", bpo::value<int>()->default_value(0), "Flag to delete previous versions of converter objects in the CCDB before uploading the new one so as to avoid proliferation on CCDB")(
     "save-to-file,file,f,o", bpo::value<std::string>()->default_value(""), "Option to save parametrization to file instead of uploading to ccdb")(
     "read-from-file,i", bpo::value<std::string>()->default_value(""), "Option to get parametrization from a file")(
     "objname,n", bpo::value<std::string>()->default_value("Response"), "Object name to be stored in file")(
     "inobjname,n", bpo::value<std::string>()->default_value("Response"), "Object name to be read from file in 'push' mode")(
-    "bb0", bpo::value<float>()->default_value(0.0320981f), "Bethe-Bloch parameter 0")(
-    "bb1", bpo::value<float>()->default_value(19.9768f), "Bethe-Bloch parameter 1")(
-    "bb2", bpo::value<float>()->default_value(2.52666e-16f), "Bethe-Bloch parameter 2")(
-    "bb3", bpo::value<float>()->default_value(2.72123f), "Bethe-Bloch parameter 3")(
-    "bb4", bpo::value<float>()->default_value(6.08092f), "Bethe-Bloch parameter 4")(
+    "bb0", bpo::value<float>()->default_value(0.03209809958934784f), "Bethe-Bloch parameter 0")(
+    "bb1", bpo::value<float>()->default_value(19.9768009185791f), "Bethe-Bloch parameter 1")(
+    "bb2", bpo::value<float>()->default_value(2.5266601063857674e-16f), "Bethe-Bloch parameter 2")(
+    "bb3", bpo::value<float>()->default_value(2.7212300300598145f), "Bethe-Bloch parameter 3")(
+    "bb4", bpo::value<float>()->default_value(6.080920219421387f), "Bethe-Bloch parameter 4")(
     "reso-param-path", bpo::value<std::string>()->default_value(""), "Path to resolution parameter file")(
     "sigmaGlobal", bpo::value<std::string>()->default_value("5.43799e-7,0.053044,0.667584,0.0142667,0.00235175,1.22482,2.3501e-7,0.031585"), "Sigma parameters global")(
     "paramMIP", bpo::value<float>()->default_value(50.f), "MIP parameter value")(
-    "paramChargeFactor", bpo::value<float>()->default_value(2.3f), "Charge factor value")(
+    "paramChargeFactor", bpo::value<float>()->default_value(2.299999952316284f), "Charge factor value")(
     "paramMultNormalization", bpo::value<float>()->default_value(11000.), "Multiplicity Normalization")(
     "useDefaultParam", bpo::value<bool>()->default_value(true), "Use default parametrizatio")(
+    "dryrun,D", bpo::value<int>()->default_value(0), "Perform a dryrun check before uploading")(
     "mode", bpo::value<string>()->default_value(""), "Running mode ('read' from file, 'write' to file, 'pull' from CCDB, 'push' to CCDB)")(
-    "help,h", "Print this help.");
+    "help,h", "Produce help message.");
   try {
-    bpo::store(parse_command_line(argc, argv, options), vm);
+    bpo::store(parse_command_line(argc, argv, options), arguments);
 
     // help
-    if (vm.count("help")) {
+    if (arguments.count("help")) {
       LOG(info) << options;
       return false;
     }
-    bpo::notify(vm);
+    bpo::notify(arguments);
   } catch (const bpo::error& e) {
     LOG(error) << e.what() << "\n";
     LOG(error) << "Error parsing command line arguments; Available options:";
@@ -74,36 +74,37 @@ bool initOptionsAndParse(bpo::options_description& options, int argc, char* argv
 int main(int argc, char* argv[])
 {
   bpo::options_description options("Allowed options");
-  bpo::variables_map vm;
-  if (!initOptionsAndParse(options, argc, argv, vm)) {
+  if (!initOptionsAndParse(options, argc, argv)) { //, arguments
     return 1;
   }
 
-  std::unique_ptr<Response> tpc = nullptr;
+  Response* tpc = nullptr;
 
-  const std::string urlCCDB = vm["url"].as<std::string>();
-  const std::string pathCCDB = vm["ccdb-path"].as<std::string>();
-  const long startTime = vm["start"].as<long>();
-  const long endTime = vm["stop"].as<long>();
-  const int optDelete = vm["delete-previous"].as<int>();
+  const std::string urlCCDB = arguments["url"].as<std::string>();
+  const auto pathCCDB = arguments["ccdb-path"].as<std::string>();
+  auto startTime = arguments["start"].as<long>();
+  auto endTime = arguments["stop"].as<long>();
+  const auto runnumber = arguments["runnumber"].as<unsigned int>();
+  auto timestamp = arguments["timestamp"].as<long>();
+  const int optDelete = arguments["delete-previous"].as<int>();
 
-  const std::string outFilename = vm["save-to-file"].as<std::string>();
-  const std::string inFilename = vm["read-from-file"].as<std::string>();
-  const std::string objname = vm["objname"].as<std::string>();
-  const std::string inobjname = vm["inobjname"].as<std::string>();
+  const std::string outFilename = arguments["save-to-file"].as<std::string>();
+  const std::string inFilename = arguments["read-from-file"].as<std::string>();
+  const std::string objname = arguments["objname"].as<std::string>();
+  const std::string inobjname = arguments["inobjname"].as<std::string>();
 
-  const float bb0 = vm["bb0"].as<float>();
-  const float bb1 = vm["bb1"].as<float>();
-  const float bb2 = vm["bb2"].as<float>();
-  const float bb3 = vm["bb3"].as<float>();
-  const float bb4 = vm["bb4"].as<float>();
-  const std::string pathResoParam = vm["reso-param-path"].as<std::string>();
-  const std::string sigmaGlobal = vm["sigmaGlobal"].as<std::string>();
-  const float mipval = vm["paramMIP"].as<float>();
-  const float chargefacval = vm["paramChargeFactor"].as<float>();
-  const float multNormval = vm["paramMultNormalization"].as<float>();
-  const bool useDefaultParam = vm["useDefaultParam"].as<bool>();
-  const std::string optMode = vm["mode"].as<std::string>();
+  const float bb0 = arguments["bb0"].as<float>();
+  const float bb1 = arguments["bb1"].as<float>();
+  const float bb2 = arguments["bb2"].as<float>();
+  const float bb3 = arguments["bb3"].as<float>();
+  const float bb4 = arguments["bb4"].as<float>();
+  const std::string pathResoParam = arguments["reso-param-path"].as<std::string>();
+  const std::string sigmaGlobal = arguments["sigmaGlobal"].as<std::string>();
+  const float mipval = arguments["paramMIP"].as<float>();
+  const float chargefacval = arguments["paramChargeFactor"].as<float>();
+  const float multNormval = arguments["paramMultNormalization"].as<float>();
+  const bool useDefaultParam = arguments["useDefaultParam"].as<bool>();
+  const std::string optMode = arguments["mode"].as<std::string>();
   if (optMode.empty()) {
     LOG(error) << "--mode must be specified (read, write, pull, push)";
     return 1;
@@ -129,16 +130,13 @@ int main(int argc, char* argv[])
     sigparamsGlobal = o2::RangeTokenizer::tokenize<double>(sigmaGlobal);
   }
 
-  // initialise CCDB API
-  std::map<std::string, std::string> metadata;
-  std::map<std::string, std::string>* headers = nullptr;
-  o2::ccdb::CcdbApi api;
   if (optMode.compare("push") == 0 || optMode.compare("pull") == 0) { // Initialise CCDB if in push/pull mode
     api.init(urlCCDB);
     if (!api.isHostReachable()) {
       LOG(warning) << "CCDB mode (push/pull) enabled but host " << urlCCDB << " is unreachable.";
       return 1;
     }
+    setupTimestamps(timestamp, startTime, endTime);
   }
 
   if (optMode.compare("read") == 0) { // Read existing object from local file
@@ -153,7 +151,7 @@ int main(int argc, char* argv[])
       return 1;
     }
 
-    tpc.reset(fin.Get<Response>(objname.c_str()));
+    tpc = fin.Get<Response>(objname.c_str());
     if (!tpc) {
       LOG(error) << "Object with name " << objname << " could not be found in file " << inFilename;
       return 1;
@@ -172,7 +170,7 @@ int main(int argc, char* argv[])
         LOG(error) << "Input file " << inFilename << " could not be read";
         return 1;
       }
-      tpc.reset(fin.Get<Response>(inobjname.c_str()));
+      tpc = fin.Get<Response>(inobjname.c_str());
       if (!tpc) {
         LOG(error) << "Object with name " << objname << " could not be found in file " << inFilename;
         return 1;
@@ -181,7 +179,7 @@ int main(int argc, char* argv[])
     } else { // Create new object if file not specified
       LOG(info) << "Creating new TPCPIDResponse object with defined parameters:";
 
-      tpc.reset(new Response());
+      tpc = new Response();
       tpc->SetBetheBlochParams(BBparams);
       tpc->SetResolutionParams(sigparamsGlobal);
       tpc->SetMIP(mipval);
@@ -203,8 +201,7 @@ int main(int argc, char* argv[])
         return 1;
       }
       fout.cd();
-      //   tpc->Print();
-      fout.WriteObject(tpc.get(), objname.c_str());
+      fout.WriteObject(tpc, objname.c_str());
       fout.Close();
       LOG(info) << "File successfully written";
       return 0;
@@ -216,17 +213,17 @@ int main(int argc, char* argv[])
       if (optDelete) {
         api.truncate(pathCCDB);
       }
-      api.storeAsTFileAny(tpc.get(), pathCCDB + "/" + objname, metadata, startTime, endTime);
+      std::map<std::string, std::string> metadata;
+      if (runnumber != 0) {
+        metadata["runnumber"] = Form("%i", runnumber);
+      }
+      storeOnCCDB(pathCCDB + "/" + objname, metadata, startTime, endTime, tpc);
     }
   }
 
   else if (optMode.compare("pull") == 0) { // pull existing from CCDB; write out to file if requested
     LOG(info) << "Attempting to pull object from CCDB (" << urlCCDB << "): " << pathCCDB << "/" << objname;
-
-    tpc.reset(api.retrieveFromTFileAny<Response>(pathCCDB + "/" + objname, metadata, -1, headers));
-    if (!tpc) { // Quit gracefully if pulling object fails
-      return 1;
-    }
+    tpc = retrieveFromCCDB<Response>(pathCCDB + "/" + objname, timestamp);
 
     tpc->PrintAll();
 
@@ -238,8 +235,7 @@ int main(int argc, char* argv[])
         return 1;
       }
       fout.cd();
-      //   tpc->Print();
-      fout.WriteObject(tpc.get(), objname.c_str());
+      fout.WriteObject(tpc, objname.c_str());
       fout.Close();
       LOG(info) << "File successfully written";
     }

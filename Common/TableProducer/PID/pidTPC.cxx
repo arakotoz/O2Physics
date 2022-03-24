@@ -48,7 +48,7 @@ void customize(std::vector<o2::framework::ConfigParamSpec>& workflowOptions)
 
 #include "Framework/runDataProcessing.h"
 
-/// Task to produce the TPC response table
+/// Task to produce the response table
 struct tpcPid {
   using Trks = soa::Join<aod::Tracks, aod::TracksExtra>;
   using Coll = soa::Join<aod::Collisions, aod::Mults>;
@@ -63,13 +63,14 @@ struct tpcPid {
   Produces<o2::aod::pidTPCHe> tablePIDHe;
   Produces<o2::aod::pidTPCAl> tablePIDAl;
   // TPC PID Response
-  o2::pid::tpc::Response* response = nullptr;
+  o2::pid::tpc::Response response;
+  o2::pid::tpc::Response* responseptr = nullptr;
   // Input parameters
   Service<o2::ccdb::BasicCCDBManager> ccdb;
   Configurable<std::string> paramfile{"param-file", "", "Path to the parametrization object, if emtpy the parametrization is not taken from file"};
   Configurable<std::string> url{"ccdb-url", "http://alice-ccdb.cern.ch", "url of the ccdb repository"};
   Configurable<std::string> ccdbPath{"ccdbPath", "Analysis/PID/TPC/Response", "Path of the TPC parametrization on the CCDB"};
-  Configurable<long> timestamp{"ccdb-timestamp", -1, "timestamp of the object"};
+  Configurable<long> ccdbTimestamp{"ccdb-timestamp", 0, "timestamp of the object used to query in CCDB the detector response. Exceptions: -1 gets the latest object, 0 gets the run dependent timestamp"};
   // Configuration flags to include and exclude particle hypotheses
   Configurable<int> pidEl{"pid-el", -1, {"Produce PID information for the Electron mass hypothesis, overrides the automatic setup: the corresponding table can be set off (0) or on (1)"}};
   Configurable<int> pidMu{"pid-mu", -1, {"Produce PID information for the Muon mass hypothesis, overrides the automatic setup: the corresponding table can be set off (0) or on (1)"}};
@@ -83,8 +84,6 @@ struct tpcPid {
 
   // Paramatrization configuration
   bool useCCDBParam = false;
-  std::string ccdbPathSignal = "";
-  std::string ccdbPathSigma = "";
 
   void init(o2::framework::InitContext& initContext)
   {
@@ -118,53 +117,71 @@ struct tpcPid {
       LOGP(info, "Loading TPC response from file {}", fname);
       try {
         std::unique_ptr<TFile> f(TFile::Open(fname, "READ"));
-        f->GetObject("Response", response);
-        response->SetUseDefaultResolutionParam(false);
+        f->GetObject("Response", responseptr);
+        response.SetParameters(responseptr);
       } catch (...) {
-        LOGP(info, "Loading the TPC PID Response from file {} failed!", fname);
+        LOGF(fatal, "Loading the TPC PID Response from file {} failed!", fname);
       };
     } else {
+      useCCDBParam = true;
       const std::string path = ccdbPath.value;
-      const auto time = timestamp.value;
+      const auto time = ccdbTimestamp.value;
       ccdb->setURL(url.value);
       ccdb->setTimestamp(time);
       ccdb->setCaching(true);
       ccdb->setLocalObjectValidityChecking();
       ccdb->setCreatedNotAfter(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-      response = ccdb->getForTimeStamp<o2::pid::tpc::Response>(path, time);
-      LOGP(info, "Loading TPC response from CCDB, using path: {} for timestamp {}", path, time);
+      response.SetParameters(ccdb->getForTimeStamp<o2::pid::tpc::Response>(path, time));
+      LOGP(info, "Loading TPC response from CCDB, using path: {} for ccdbTimestamp {}", path, time);
+      response.PrintAll();
     }
   }
 
   void process(Coll const& collisions, Trks const& tracks,
                aod::BCsWithTimestamps const&)
   {
-    // Check and fill enabled tables
-    auto makeTable = [&tracks, &collisions, this](const Configurable<int>& flag, auto& table, const o2::track::PID::ID pid) {
-      if (flag.value == 1) {
-        // Prepare memory for enabled tables
-        table.reserve(tracks.size());
-        for (auto const& trk : tracks) { // Loop on Tracks
-          auto collision = collisions.iteratorAt(trk.collisionId());
-          const float numbersigma = response->GetNumberOfSigma(collision, trk, pid);
-          aod::pidutils::packInTable<aod::pidtpc_tiny::binned_nsigma_t,
-                                     aod::pidtpc_tiny::upper_bin,
-                                     aod::pidtpc_tiny::lower_bin>(numbersigma, table,
-                                                                  aod::pidtpc_tiny::binned_min,
-                                                                  aod::pidtpc_tiny::binned_max,
-                                                                  aod::pidtpc_tiny::bin_width);
-        }
+    auto reserveTable = [&tracks](const Configurable<int>& flag, auto& table) {
+      if (flag.value != 1) {
+        return;
       }
+      table.reserve(tracks.size());
     };
-    makeTable(pidEl, tablePIDEl, o2::track::PID::Electron);
-    makeTable(pidMu, tablePIDMu, o2::track::PID::Muon);
-    makeTable(pidPi, tablePIDPi, o2::track::PID::Pion);
-    makeTable(pidKa, tablePIDKa, o2::track::PID::Kaon);
-    makeTable(pidPr, tablePIDPr, o2::track::PID::Proton);
-    makeTable(pidDe, tablePIDDe, o2::track::PID::Deuteron);
-    makeTable(pidTr, tablePIDTr, o2::track::PID::Triton);
-    makeTable(pidHe, tablePIDHe, o2::track::PID::Helium3);
-    makeTable(pidAl, tablePIDAl, o2::track::PID::Alpha);
+    // Prepare memory for enabled tables
+    reserveTable(pidEl, tablePIDEl);
+    reserveTable(pidMu, tablePIDMu);
+    reserveTable(pidPi, tablePIDPi);
+    reserveTable(pidKa, tablePIDKa);
+    reserveTable(pidPr, tablePIDPr);
+    reserveTable(pidDe, tablePIDDe);
+    reserveTable(pidTr, tablePIDTr);
+    reserveTable(pidHe, tablePIDHe);
+    reserveTable(pidAl, tablePIDAl);
+    int lastCollisionId = -1;                                                                                        // Last collision ID analysed
+    for (auto const& trk : tracks) {                                                                                 // Loop on Tracks
+      if (useCCDBParam && ccdbTimestamp.value == 0 && trk.has_collision() && trk.collisionId() != lastCollisionId) { // Updating parametrization only if the initial timestamp is 0
+        lastCollisionId = trk.collisionId();
+        const auto& bc = collisions.iteratorAt(trk.collisionId()).bc_as<aod::BCsWithTimestamps>();
+        response.SetParameters(ccdb->getForTimeStamp<o2::pid::tpc::Response>(ccdbPath.value, bc.timestamp()));
+      }
+      // Check and fill enabled tables
+      auto makeTable = [&trk, &collisions, this](const Configurable<int>& flag, auto& table, const o2::track::PID::ID pid) {
+        if (flag.value != 1) {
+          return;
+        }
+
+        aod::pidutils::packInTable<aod::pidtpc_tiny::binning>(response.GetNumberOfSigma(collisions.iteratorAt(trk.collisionId()), trk, pid),
+                                                              table);
+      };
+      makeTable(pidEl, tablePIDEl, o2::track::PID::Electron);
+      makeTable(pidMu, tablePIDMu, o2::track::PID::Muon);
+      makeTable(pidPi, tablePIDPi, o2::track::PID::Pion);
+      makeTable(pidKa, tablePIDKa, o2::track::PID::Kaon);
+      makeTable(pidPr, tablePIDPr, o2::track::PID::Proton);
+      makeTable(pidDe, tablePIDDe, o2::track::PID::Deuteron);
+      makeTable(pidTr, tablePIDTr, o2::track::PID::Triton);
+      makeTable(pidHe, tablePIDHe, o2::track::PID::Helium3);
+      makeTable(pidAl, tablePIDAl, o2::track::PID::Alpha);
+    }
   }
 };
 
@@ -187,14 +204,14 @@ struct tpcPidQa {
 
   HistogramRegistry histos{"Histos", {}, OutputObjHandlingPolicy::QAObject};
 
-  Configurable<int> logAxis{"logAxis", 0, "Flag to use a log momentum axis"};
-  Configurable<int> nBinsP{"nBinsP", 400, "Number of bins for the momentum"};
-  Configurable<float> minP{"minP", 0, "Minimum momentum in range"};
+  Configurable<int> logAxis{"logAxis", 1, "Flag to use a log momentum axis"};
+  Configurable<int> nBinsP{"nBinsP", 3000, "Number of bins for the momentum"};
+  Configurable<float> minP{"minP", 0.01, "Minimum momentum in range"};
   Configurable<float> maxP{"maxP", 20, "Maximum momentum in range"};
   Configurable<int> nBinsNSigma{"nBinsNSigma", 200, "Number of bins for the NSigma"};
   Configurable<float> minNSigma{"minNSigma", -10.f, "Minimum NSigma in range"};
   Configurable<float> maxNSigma{"maxNSigma", 10.f, "Maximum NSigma in range"};
-  Configurable<int> applyEvSel{"applyEvSel", 0, "Flag to apply rapidity cut: 0 -> no event selection, 1 -> Run 2 event selection, 2 -> Run 3 event selection"};
+  Configurable<int> applyEvSel{"applyEvSel", 2, "Flag to apply rapidity cut: 0 -> no event selection, 1 -> Run 2 event selection, 2 -> Run 3 event selection"};
   Configurable<bool> applyTrackCut{"applyTrackCut", false, "Flag to apply standard track cuts"};
   Configurable<bool> applyRapidityCut{"applyRapidityCut", false, "Flag to apply rapidity cut"};
 
@@ -272,12 +289,13 @@ struct tpcPidQa {
     }
   }
 
-  void process(soa::Join<aod::Collisions, aod::EvSels>::iterator const& collision,
-               soa::Join<aod::Tracks, aod::TracksExtra,
+  using Trks = soa::Join<aod::Tracks, aod::TracksExtra,
                          aod::pidTPCEl, aod::pidTPCMu, aod::pidTPCPi,
                          aod::pidTPCKa, aod::pidTPCPr, aod::pidTPCDe,
                          aod::pidTPCTr, aod::pidTPCHe, aod::pidTPCAl,
-                         aod::TrackSelection> const& tracks)
+                         aod::TrackSelection>;
+  void process(soa::Join<aod::Collisions, aod::EvSels>::iterator const& collision,
+               Trks const& tracks)
   {
 
     histos.fill(HIST("event/evsel"), 1);

@@ -20,10 +20,7 @@
 #include <array>
 #include <vector>
 #include <cmath>
-#include <iostream>
 #include "Framework/Logger.h"
-// ROOT includes
-#include "TFormula.h"
 // O2 includes
 #include "ReconstructionDataFormats/PID.h"
 #include "DataFormatsTPC/BetheBlochAleph.h"
@@ -42,19 +39,30 @@ class Response
 
   /// Setter and Getter for the private parameters
   void SetBetheBlochParams(const std::array<float, 5>& betheBlochParams) { mBetheBlochParams = betheBlochParams; }
+  void SetResolutionParamsDefault(const std::array<float, 2>& resolutionParamsDefault) { mResolutionParamsDefault = resolutionParamsDefault; }
   void SetResolutionParams(const std::vector<double>& resolutionParams) { mResolutionParams = resolutionParams; }
   void SetMIP(const float mip) { mMIP = mip; }
   void SetChargeFactor(const float chargeFactor) { mChargeFactor = chargeFactor; }
   void SetMultiplicityNormalization(const float multNormalization) { mMultNormalization = multNormalization; }
-  void SetResolutionParametrization(TFormula* sigmaParametrization) { mSigmaParametrization.reset(sigmaParametrization); }
   void SetUseDefaultResolutionParam(const bool useDefault) { mUseDefaultResolutionParam = useDefault; }
+  void SetParameters(const Response* response)
+  {
+    mBetheBlochParams = response->GetBetheBlochParams();
+    mResolutionParamsDefault = response->GetResolutionParamsDefault();
+    mResolutionParams = response->GetResolutionParams();
+    mMIP = response->GetMIP();
+    mChargeFactor = response->GetChargeFactor();
+    mMultNormalization = response->GetMultiplicityNormalization();
+    mUseDefaultResolutionParam = response->GetUseDefaultResolutionParam();
+  }
 
   const std::array<float, 5> GetBetheBlochParams() const { return mBetheBlochParams; }
+  const std::array<float, 2> GetResolutionParamsDefault() const { return mResolutionParamsDefault; }
   const std::vector<double> GetResolutionParams() const { return mResolutionParams; }
   const float GetMIP() const { return mMIP; }
   const float GetChargeFactor() const { return mChargeFactor; }
   const float GetMultiplicityNormalization() const { return mMultNormalization; }
-  // std::unique_ptr<TFormula> GetResolutionParametrization() { return mSigmaParametrization; }
+  const bool GetUseDefaultResolutionParam() const { return mUseDefaultResolutionParam; }
 
   /// Gets the expected signal of the track
   template <typename TrackType>
@@ -74,14 +82,13 @@ class Response
   void PrintAll() const;
 
  private:
-  std::array<float, 5> mBetheBlochParams = {0.0320981, 19.9768, 2.52666e-16, 2.72123, 6.08092};
+  std::array<float, 5> mBetheBlochParams = {0.03209809958934784, 19.9768009185791, 2.5266601063857674e-16, 2.7212300300598145, 6.080920219421387};
   std::array<float, 2> mResolutionParamsDefault = {0.07, 0.0};
   std::vector<double> mResolutionParams = {5.43799e-7, 0.053044, 0.667584, 0.0142667, 0.00235175, 1.22482, 2.3501e-7, 0.031585};
   float mMIP = 50.f;
-  float mChargeFactor = 2.3f;
+  float mChargeFactor = 2.299999952316284f;
   float mMultNormalization = 11000.;
   bool mUseDefaultResolutionParam = true;
-  std::unique_ptr<TFormula> mSigmaParametrization{new TFormula("fSigmaParametrization", "sqrt(([0]**2)*x[0]+(([1]**2)*(x[2]*[5])*(x[0]/sqrt(1+x[1]**2))**[2])+x[2]*x[3]**2+([4]*x[4])**2 +((x[5]*[6])**2)+(x[5]*(x[0]/sqrt(1+x[1]**2))*[7])**2)")};
 
   ClassDefNV(Response, 2);
 
@@ -114,7 +121,7 @@ inline float Response::GetExpectedSigma(const CollisionType& collision, const Tr
 
     const std::vector<double> values{1.f / dEdx, track.tgl(), std::sqrt(ncl), relReso, track.signed1Pt(), collision.multTPC() / mMultNormalization};
 
-    const float reso = mSigmaParametrization->EvalPar(values.data(), mResolutionParams.data()) * dEdx * mMIP;
+    const float reso = sqrt(pow(mResolutionParams[0], 2) * values[0] + pow(mResolutionParams[1], 2) * (values[2] * mResolutionParams[5]) * pow(values[0] / sqrt(1 + pow(values[1], 2)), mResolutionParams[2]) + values[2] * pow(values[3], 2) + pow(mResolutionParams[4] * values[4], 2) + pow(values[5] * mResolutionParams[6], 2) + pow(values[5] * (values[0] / sqrt(1 + pow(values[1], 2))) * mResolutionParams[7], 2)) * dEdx * mMIP;
     reso >= 0.f ? resolution = reso : resolution = 0.f;
   }
   return resolution;
