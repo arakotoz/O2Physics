@@ -22,7 +22,7 @@
 #include "Framework/HistogramRegistry.h"
 #include "Framework/runDataProcessing.h"
 
-#include "../filterTables.h"
+#include "EventFiltering/filterTables.h"
 
 #include "PWGHF/DataModel/HFSecondaryVertex.h"
 #include "PWGHF/DataModel/HFCandidateSelectionTables.h"
@@ -35,7 +35,6 @@
 
 // ML application
 #include <onnxruntime/core/session/experimental_onnxruntime_cxx_api.h>
-#include <string>
 
 using namespace o2;
 using namespace o2::framework;
@@ -232,8 +231,8 @@ struct AddCollisionId {
   Produces<o2::aod::Colls2Prong> colls2Prong;
   Produces<o2::aod::Colls3Prong> colls3Prong;
 
-  void process(aod::Hf2Prong const& cand2Prongs,
-               aod::Hf3Prong const& cand3Prongs,
+  void process(aod::Hf2Prongs const& cand2Prongs,
+               aod::Hf3Prongs const& cand3Prongs,
                aod::Tracks const&)
   {
     for (const auto& cand2Prong : cand2Prongs) {
@@ -340,9 +339,9 @@ struct HfFilter { // Main struct for HF triggers
   {
     cutsSingleTrackBeauty = {cutsTrackBeauty3Prong, cutsTrackBeauty4Prong};
 
-    hProcessedEvents = registry.add<TH1>("fProcessedEvents", "HF - event filtered;;counts", HistType::kTH1F, {{6, -0.5, 5.5}});
-    std::array<std::string, 6> eventTitles = {"all", "rejected", "w/ high-#it{p}_{T} candidate", "w/ beauty candidate", "w/ femto candidate", "w/ double charm"};
-    for (size_t iBin = 0; iBin < eventTitles.size(); iBin++) {
+    hProcessedEvents = registry.add<TH1>("fProcessedEvents", "HF - event filtered;;counts", HistType::kTH1F, {{kNtriggersHF + 2, -0.5, kNtriggersHF + 1.5}});
+    std::array<std::string, kNtriggersHF + 2> eventTitles = {"all", "rejected", "w/ high-#it{p}_{T} candidate", "w/ beauty candidate", "w/ femto candidate", "w/ double charm"};
+    for (auto iBin = 0; iBin < kNtriggersHF + 2; ++iBin) {
       hProcessedEvents->GetXaxis()->SetBinLabel(iBin + 1, eventTitles[iBin].data());
     }
 
@@ -384,15 +383,17 @@ struct HfFilter { // Main struct for HF triggers
         onnxFileXicToPiKPConf};
 
       for (auto iCharmPart{0}; iCharmPart < kNCharmParticles; ++iCharmPart) {
-        sessionML[iCharmPart].reset(new Ort::Experimental::Session{env[iCharmPart], onnxFiles[iCharmPart], sessionOptions[iCharmPart]});
-        inputNamesML[iCharmPart] = sessionML[iCharmPart]->GetInputNames();
-        inputShapesML[iCharmPart] = sessionML[iCharmPart]->GetInputShapes();
-        if (inputShapesML[iCharmPart][0][0] < 0) {
-          LOGF(warning, Form("Model for %s with negative input shape likely because converted with ummingbird, setting it to 1.", charmParticleNames[iCharmPart].data()));
-          inputShapesML[iCharmPart][0][0] = 1;
+        if (onnxFiles[iCharmPart] != "") {
+          sessionML[iCharmPart].reset(new Ort::Experimental::Session{env[iCharmPart], onnxFiles[iCharmPart], sessionOptions[iCharmPart]});
+          inputNamesML[iCharmPart] = sessionML[iCharmPart]->GetInputNames();
+          inputShapesML[iCharmPart] = sessionML[iCharmPart]->GetInputShapes();
+          if (inputShapesML[iCharmPart][0][0] < 0) {
+            LOGF(warning, Form("Model for %s with negative input shape likely because converted with ummingbird, setting it to 1.", charmParticleNames[iCharmPart].data()));
+            inputShapesML[iCharmPart][0][0] = 1;
+          }
+          outputNamesML[iCharmPart] = sessionML[iCharmPart]->GetOutputNames();
+          outputShapesML[iCharmPart] = sessionML[iCharmPart]->GetOutputShapes();
         }
-        outputNamesML[iCharmPart] = sessionML[iCharmPart]->GetOutputNames();
-        outputShapesML[iCharmPart] = sessionML[iCharmPart]->GetOutputShapes();
       }
     }
   }
@@ -660,8 +661,8 @@ struct HfFilter { // Main struct for HF triggers
     return kStar;
   } // float computeRelativeMomentum(const T& track, const std::array<float, 3>& CharmCandMomentum, const float& CharmMass)
 
-  using HfTrackIndexProng2withColl = soa::Join<aod::Hf2Prong, aod::Colls2Prong>;
-  using HfTrackIndexProng3withColl = soa::Join<aod::Hf3Prong, aod::Colls3Prong>;
+  using HfTrackIndexProng2withColl = soa::Join<aod::Hf2Prongs, aod::Colls2Prong>;
+  using HfTrackIndexProng3withColl = soa::Join<aod::Hf3Prongs, aod::Colls3Prong>;
   using BigTracksWithProtonPID = soa::Join<aod::BigTracksExtended, aod::TrackSelection, aod::pidTPCFullPr, aod::pidTOFFullPr>;
   using BigTracksMCPID = soa::Join<aod::BigTracksExtended, aod::pidTPCFullPi, aod::pidTOFFullPi, aod::pidTPCFullKa, aod::pidTOFFullKa, aod::pidTPCFullPr, aod::pidTOFFullPr, aod::BigTracksMC>;
 
@@ -709,7 +710,7 @@ struct HfFilter { // Main struct for HF triggers
           assert(typeInfo.GetElementCount() == 3); // we need multiclass
           auto scores = outputTensorD0[1].GetTensorMutableData<float>();
 
-          if (applyML) {
+          if (applyML && activateQA) {
             hBDTScoreBkg[kD0]->Fill(scores[0]);
             hBDTScorePrompt[kD0]->Fill(scores[1]);
             hBDTScoreNonPrompt[kD0]->Fill(scores[2]);
@@ -837,7 +838,7 @@ struct HfFilter { // Main struct for HF triggers
             assert(typeInfo.GetElementCount() == 3); // we need multiclass
             auto scores = outputTensor[1].GetTensorMutableData<float>();
 
-            if (applyML) {
+            if (applyML && activateQA) {
               hBDTScoreBkg[iCharmPart]->Fill(scores[0]);
               hBDTScorePrompt[iCharmPart]->Fill(scores[1]);
               hBDTScoreNonPrompt[iCharmPart]->Fill(scores[2]);
@@ -960,8 +961,8 @@ struct HfFilter { // Main struct for HF triggers
   }
 
   void
-    processTraining(aod::Hf2Prong const& cand2Prongs,
-                    aod::Hf3Prong const& cand3Prongs,
+    processTraining(aod::Hf2Prongs const& cand2Prongs,
+                    aod::Hf3Prongs const& cand3Prongs,
                     aod::McParticles const& particlesMC,
                     BigTracksMCPID const&)
   {
@@ -978,7 +979,7 @@ struct HfFilter { // Main struct for HF triggers
       auto indexRec = RecoDecay::getMatchedMCRec(particlesMC, std::array{trackPos, trackNeg}, pdg::Code::kD0, array{+kPiPlus, -kKPlus}, true, &sign);
       if (indexRec > -1) {
         auto particle = particlesMC.rawIteratorAt(indexRec);
-        origin = (RecoDecay::getMother(particlesMC, particle, kBottom, true) > -1 ? OriginType::NonPrompt : OriginType::Prompt);
+        origin = (RecoDecay::getMother(particle, kBottom, true) > -1 ? OriginType::NonPrompt : OriginType::Prompt);
         if (origin == OriginType::NonPrompt) {
           flag = kNonPrompt;
         } else {
@@ -1037,7 +1038,7 @@ struct HfFilter { // Main struct for HF triggers
 
       if (indexRec > -1) {
         auto particle = particlesMC.rawIteratorAt(indexRec);
-        origin = (RecoDecay::getMother(particlesMC, particle, kBottom, true) > -1 ? OriginType::NonPrompt : OriginType::Prompt);
+        origin = (RecoDecay::getMother(particle, kBottom, true) > -1 ? OriginType::NonPrompt : OriginType::Prompt);
         if (origin == OriginType::NonPrompt) {
           flag = kNonPrompt;
         } else {
