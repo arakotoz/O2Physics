@@ -73,7 +73,7 @@ struct LfTreeCreatorNuclei {
   Filter trackFilter = (nabs(aod::track::eta) < cfgCutEta) && (requireGlobalTrackInFilter());
   Filter DCAcutFilter = (nabs(aod::track::dcaXY) < cfgCutDCAxy) && (nabs(aod::track::dcaZ) < cfgCutDCAz);
   using EventCandidates = soa::Join<aod::Collisions, aod::EvSels, aod::Mults>;
-  using TrackCandidates = soa::Join<aod::Tracks, aod::TracksExtra, aod::TracksExtended, aod::TrackSelection,
+  using TrackCandidates = soa::Join<aod::Tracks, aod::TracksExtra, aod::TracksDCA, aod::TrackSelection,
                                     aod::pidTOFbeta, aod::TOFSignal,
                                     aod::pidTPCFullPi, aod::pidTOFFullPi,
                                     aod::pidTPCFullKa, aod::pidTOFFullKa,
@@ -142,7 +142,7 @@ struct LfTreeCreatorNuclei {
   {
     for (const auto& collision : collisions) {
       if (useEvsel && !collision.sel8()) {
-        return;
+        continue;
       }
       const auto& tracksInCollision = tracks.sliceBy(aod::track::collisionId, collision.globalIndex());
       fillForOneEvent<false>(collision, tracksInCollision);

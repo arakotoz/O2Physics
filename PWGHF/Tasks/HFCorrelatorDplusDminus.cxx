@@ -129,7 +129,7 @@ struct HfCorrelatorDplusDminus {
   Filter filterSelectCandidates = (aod::hf_selcandidate_dplus::isSelDplusToPiKPi >= selectionFlagDplus);
 
   /// Dplus-Dminus correlation pair builder - for real data and data-like analysis (i.e. reco-level w/o matching request via MC truth)
-  void processData(aod::Collision const& collision, soa::Join<aod::Tracks, aod::TracksExtended>& tracks, soa::Filtered<soa::Join<aod::HfCandProng3, aod::HFSelDplusToPiKPiCandidate>> const& candidates, aod::BigTracks const& bigtracks)
+  void processData(aod::Collision const& collision, soa::Join<aod::Tracks, aod::TracksDCA>& tracks, soa::Filtered<soa::Join<aod::HfCandProng3, aod::HFSelDplusToPiKPiCandidate>> const& candidates, aod::BigTracks const& bigtracks)
   {
     int nTracks = 0;
     if (collision.numContrib() > 1) {
@@ -235,7 +235,7 @@ struct HfCorrelatorDplusDminus {
   PROCESS_SWITCH(HfCorrelatorDplusDminus, processData, "Process data", false);
 
   /// Dplus-Dminus correlation pair builder - for MC reco-level analysis (candidates matched to true signal only, but also the various bkg sources are studied)
-  void processMcRec(aod::Collision const& collision, soa::Join<aod::Tracks, aod::TracksExtended>& tracks, soa::Filtered<soa::Join<aod::HfCandProng3, aod::HFSelDplusToPiKPiCandidate, aod::HfCandProng3MCRec>> const& candidates, aod::BigTracks const& bigtracks)
+  void processMcRec(aod::Collision const& collision, soa::Join<aod::Tracks, aod::TracksDCA>& tracks, soa::Filtered<soa::Join<aod::HfCandProng3, aod::HFSelDplusToPiKPiCandidate, aod::HfCandProng3MCRec>> const& candidates, aod::BigTracks const& bigtracks)
   {
     int nTracks = 0;
     if (collision.numContrib() > 1) {
@@ -369,7 +369,7 @@ struct HfCorrelatorDplusDminus {
       if (std::abs(particle1.pdgCode()) != pdg::Code::kDPlus) {
         continue;
       }
-      double yD = RecoDecay::Y(array{particle1.px(), particle1.py(), particle1.pz()}, RecoDecay::getMassPDG(particle1.pdgCode()));
+      double yD = RecoDecay::y(array{particle1.px(), particle1.py(), particle1.pz()}, RecoDecay::getMassPDG(particle1.pdgCode()));
       if (cutYCandMax >= 0. && std::abs(yD) > cutYCandMax) {
         continue;
       }
@@ -392,7 +392,7 @@ struct HfCorrelatorDplusDminus {
         if (particle2.pdgCode() != -pdg::Code::kDPlus) { // check that inner particle is a Dminus
           continue;
         }
-        if (cutYCandMax >= 0. && std::abs(RecoDecay::Y(array{particle2.px(), particle2.py(), particle2.pz()}, RecoDecay::getMassPDG(particle2.pdgCode()))) > cutYCandMax) {
+        if (cutYCandMax >= 0. && std::abs(RecoDecay::y(array{particle2.px(), particle2.py(), particle2.pz()}, RecoDecay::getMassPDG(particle2.pdgCode()))) > cutYCandMax) {
           continue;
         }
         if (cutPtCandMin >= 0. && particle2.pt() < cutPtCandMin) {
@@ -466,7 +466,7 @@ struct HfCorrelatorDplusDminus {
         continue;
       }
       counterCCbarBeforeEtasel++; // count c or cbar (before kinematic selection)
-      double yC = RecoDecay::Y(array{particle1.px(), particle1.py(), particle1.pz()}, RecoDecay::getMassPDG(particle1.pdgCode()));
+      double yC = RecoDecay::y(array{particle1.px(), particle1.py(), particle1.pz()}, RecoDecay::getMassPDG(particle1.pdgCode()));
       if (cutYCandMax >= 0. && std::abs(yC) > cutYCandMax) {
         continue;
       }
@@ -490,7 +490,7 @@ struct HfCorrelatorDplusDminus {
         if (particle2.pdgCode() != PDG_t::kCharmBar) {
           continue;
         }
-        if (cutYCandMax >= 0. && std::abs(RecoDecay::Y(array{particle2.px(), particle2.py(), particle2.pz()}, RecoDecay::getMassPDG(particle2.pdgCode()))) > cutYCandMax) {
+        if (cutYCandMax >= 0. && std::abs(RecoDecay::y(array{particle2.px(), particle2.py(), particle2.pz()}, RecoDecay::getMassPDG(particle2.pdgCode()))) > cutYCandMax) {
           continue;
         }
         if (cutPtCandMin >= 0. && particle2.pt() < cutPtCandMin) {

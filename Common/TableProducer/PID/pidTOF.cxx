@@ -13,7 +13,6 @@
 /// \file   pidTOF.cxx
 /// \author Nicolò Jacazio nicolo.jacazio@cern.ch
 /// \brief  Task to produce PID tables for TOF split for each particle with only the Nsigma information.
-///         The event time maker can be used to produce event TOF times.
 ///         Only the tables for the mass hypotheses requested are filled, the others are sent empty.
 ///         QA histograms for the TOF PID can be produced by adding `--add-qa 1` to the workflow
 ///
@@ -62,6 +61,7 @@ struct tofPid {
   Configurable<std::string> url{"ccdb-url", "http://alice-ccdb.cern.ch", "url of the ccdb repository"};
   Configurable<std::string> ccdbPath{"ccdbPath", "Analysis/PID/TOF", "Path of the TOF parametrization on the CCDB"};
   Configurable<long> timestamp{"ccdb-timestamp", -1, "timestamp of the object"};
+  Configurable<bool> enableTimeDependentResponse{"enableTimeDependentResponse", false, "Flag to use the collision timestamp to fetch the PID Response"};
   // Configuration flags to include and exclude particle hypotheses
   Configurable<int> pidEl{"pid-el", -1, {"Produce PID information for the Electron mass hypothesis, overrides the automatic setup: the corresponding table can be set off (0) or on (1)"}};
   Configurable<int> pidMu{"pid-mu", -1, {"Produce PID information for the Muon mass hypothesis, overrides the automatic setup: the corresponding table can be set off (0) or on (1)"}};
@@ -72,27 +72,14 @@ struct tofPid {
   Configurable<int> pidTr{"pid-tr", -1, {"Produce PID information for the Triton mass hypothesis, overrides the automatic setup: the corresponding table can be set off (0) or on (1)"}};
   Configurable<int> pidHe{"pid-he", -1, {"Produce PID information for the Helium3 mass hypothesis, overrides the automatic setup: the corresponding table can be set off (0) or on (1)"}};
   Configurable<int> pidAl{"pid-al", -1, {"Produce PID information for the Alpha mass hypothesis, overrides the automatic setup: the corresponding table can be set off (0) or on (1)"}};
+  // Running variables
+  std::string parametrizationPath = "";
 
   void init(o2::framework::InitContext& initContext)
   {
-    // Check that both processes are not enabled
-    if (doprocessNoEvTime == true && doprocessEvTime == true) {
-      LOGF(fatal, "Cannot enable processNoEvTime and processEvTime at the same time. Please choose one.");
-    }
     // Checking the tables are requested in the workflow and enabling them
     auto enableFlag = [&](const std::string particle, Configurable<int>& flag) {
-      const std::string table = "pidTOF" + particle;
-      if (isTableRequiredInWorkflow(initContext, table)) {
-        if (flag < 0) {
-          flag.value = 1;
-          LOG(info) << "Auto-enabling table: " + table;
-        } else if (flag > 0) {
-          flag.value = 1;
-          LOG(info) << "Table enabled: " + table;
-        } else {
-          LOG(info) << "Table disabled: " + table;
-        }
-      }
+      enableFlagIfTableRequired(initContext, "pidTOF" + particle, flag);
     };
 
     enableFlag("El", pidEl);
@@ -120,26 +107,26 @@ struct tofPid {
       LOG(info) << "Loading exp. sigma parametrization from file" << fname << ", using param: " << sigmaname.value;
       response.LoadParamFromFile(fname.data(), sigmaname.value, DetectorResponse::kSigma);
     } else { // Loading it from CCDB
-      std::string path = ccdbPath.value + "/" + sigmaname.value;
-      LOG(info) << "Loading exp. sigma parametrization from CCDB, using path: " << path << " for timestamp " << timestamp.value;
-      response.LoadParam(DetectorResponse::kSigma, ccdb->getForTimeStamp<Parametrization>(path, timestamp.value));
+      parametrizationPath = ccdbPath.value + "/" + sigmaname.value;
+      LOG(info) << "Loading exp. sigma parametrization from CCDB, using path: '" << parametrizationPath << "' for timestamp " << timestamp.value;
+      response.LoadParam(DetectorResponse::kSigma, ccdb->getForTimeStamp<Parametrization>(parametrizationPath, timestamp.value));
     }
   }
 
-  using TrksEvTime = soa::Join<aod::Tracks, aod::TracksExtra, aod::TOFSignal, aod::TOFEvTime>;
+  using Trks = soa::Join<aod::Tracks, aod::TracksExtra, aod::TOFSignal, aod::TOFEvTime, aod::pidEvTimeFlags>;
   template <o2::track::PID::ID pid>
-  using ResponseImplementationEvTime = o2::pid::tof::ExpTimes<TrksEvTime::iterator, pid>;
-  void processEvTime(TrksEvTime const& tracks, aod::Collisions const&)
+  using ResponseImplementation = o2::pid::tof::ExpTimes<Trks::iterator, pid>;
+  void process(Trks const& tracks, aod::Collisions const&, aod::BCsWithTimestamps const&)
   {
-    constexpr auto responseEl = ResponseImplementationEvTime<PID::Electron>();
-    constexpr auto responseMu = ResponseImplementationEvTime<PID::Muon>();
-    constexpr auto responsePi = ResponseImplementationEvTime<PID::Pion>();
-    constexpr auto responseKa = ResponseImplementationEvTime<PID::Kaon>();
-    constexpr auto responsePr = ResponseImplementationEvTime<PID::Proton>();
-    constexpr auto responseDe = ResponseImplementationEvTime<PID::Deuteron>();
-    constexpr auto responseTr = ResponseImplementationEvTime<PID::Triton>();
-    constexpr auto responseHe = ResponseImplementationEvTime<PID::Helium3>();
-    constexpr auto responseAl = ResponseImplementationEvTime<PID::Alpha>();
+    constexpr auto responseEl = ResponseImplementation<PID::Electron>();
+    constexpr auto responseMu = ResponseImplementation<PID::Muon>();
+    constexpr auto responsePi = ResponseImplementation<PID::Pion>();
+    constexpr auto responseKa = ResponseImplementation<PID::Kaon>();
+    constexpr auto responsePr = ResponseImplementation<PID::Proton>();
+    constexpr auto responseDe = ResponseImplementation<PID::Deuteron>();
+    constexpr auto responseTr = ResponseImplementation<PID::Triton>();
+    constexpr auto responseHe = ResponseImplementation<PID::Helium3>();
+    constexpr auto responseAl = ResponseImplementation<PID::Alpha>();
 
     auto reserveTable = [&tracks](const Configurable<int>& flag, auto& table) {
       if (flag.value != 1) {
@@ -158,9 +145,10 @@ struct tofPid {
     reserveTable(pidHe, tablePIDHe);
     reserveTable(pidAl, tablePIDAl);
 
-    for (auto const& trk : tracks) { // Loop on collisions
-      if (!trk.has_collision()) {    // Track was not assigned, cannot compute event time
-        auto fillEmptyTable = [](const Configurable<int>& flag, auto& table) {
+    int lastCollisionId = -1;          // Last collision ID analysed
+    for (auto const& track : tracks) { // Loop on all tracks
+      if (!track.has_collision()) {    // Track was not assigned, cannot compute NSigma (no event time)
+        auto makeTableEmpty = [&](const Configurable<int>& flag, auto& table) {
           if (flag.value != 1) {
             return;
           }
@@ -168,79 +156,54 @@ struct tofPid {
                                                                 table);
         };
 
-        fillEmptyTable(pidEl, tablePIDEl);
-        fillEmptyTable(pidMu, tablePIDMu);
-        fillEmptyTable(pidPi, tablePIDPi);
-        fillEmptyTable(pidKa, tablePIDKa);
-        fillEmptyTable(pidPr, tablePIDPr);
-        fillEmptyTable(pidDe, tablePIDDe);
-        fillEmptyTable(pidTr, tablePIDTr);
-        fillEmptyTable(pidHe, tablePIDHe);
-        fillEmptyTable(pidAl, tablePIDAl);
+        makeTableEmpty(pidEl, tablePIDEl);
+        makeTableEmpty(pidMu, tablePIDMu);
+        makeTableEmpty(pidPi, tablePIDPi);
+        makeTableEmpty(pidKa, tablePIDKa);
+        makeTableEmpty(pidPr, tablePIDPr);
+        makeTableEmpty(pidDe, tablePIDDe);
+        makeTableEmpty(pidTr, tablePIDTr);
+        makeTableEmpty(pidHe, tablePIDHe);
+        makeTableEmpty(pidAl, tablePIDAl);
 
         continue;
       }
 
-      // Check and fill enabled tables
-      auto makeTable = [&trk, this](const Configurable<int>& flag, auto& table, const auto& responsePID) {
-        if (flag.value == 1) {
-          aod::pidutils::packInTable<aod::pidtof_tiny::binning>(responsePID.GetSeparation(response, trk, trk.tofEvTime(), trk.tofEvTimeErr()),
-                                                                table);
-        }
-      };
+      if (track.collisionId() == lastCollisionId) { // Tracks from last collision already processed
+        continue;
+      }
 
-      makeTable(pidEl, tablePIDEl, responseEl);
-      makeTable(pidMu, tablePIDMu, responseMu);
-      makeTable(pidPi, tablePIDPi, responsePi);
-      makeTable(pidKa, tablePIDKa, responseKa);
-      makeTable(pidPr, tablePIDPr, responsePr);
-      makeTable(pidDe, tablePIDDe, responseDe);
-      makeTable(pidTr, tablePIDTr, responseTr);
-      makeTable(pidHe, tablePIDHe, responseHe);
-      makeTable(pidAl, tablePIDAl, responseAl);
+      // Fill new table for the tracks in a collision
+      lastCollisionId = track.collisionId(); // Cache last collision ID
+      timestamp.value = track.collision().bc_as<aod::BCsWithTimestamps>().timestamp();
+      if (enableTimeDependentResponse) {
+        LOG(debug) << "Updating parametrization from path '" << parametrizationPath << "' and timestamp " << timestamp.value;
+        response.LoadParam(DetectorResponse::kSigma, ccdb->getForTimeStamp<Parametrization>(parametrizationPath, timestamp));
+      }
+
+      const auto& tracksInCollision = tracks.sliceBy(aod::track::collisionId, lastCollisionId);
+      for (auto const& trkInColl : tracksInCollision) { // Loop on tracks
+        // Check and fill enabled tables
+        auto makeTable = [&trkInColl, this](const Configurable<int>& flag, auto& table, const auto& responsePID) {
+          if (flag.value != 1) {
+            return;
+          }
+          aod::pidutils::packInTable<aod::pidtof_tiny::binning>(responsePID.GetSeparation(response, trkInColl),
+                                                                table);
+        };
+
+        makeTable(pidEl, tablePIDEl, responseEl);
+        makeTable(pidMu, tablePIDMu, responseMu);
+        makeTable(pidPi, tablePIDPi, responsePi);
+        makeTable(pidKa, tablePIDKa, responseKa);
+        makeTable(pidPr, tablePIDPr, responsePr);
+        makeTable(pidDe, tablePIDDe, responseDe);
+        makeTable(pidTr, tablePIDTr, responseTr);
+        makeTable(pidHe, tablePIDHe, responseHe);
+        makeTable(pidAl, tablePIDAl, responseAl);
+      }
     }
   }
-
-  PROCESS_SWITCH(tofPid, processEvTime, "Produce TOF response with TOF event time", false);
-
-  using Trks = soa::Join<aod::Tracks, aod::TracksExtra, aod::TOFSignal>;
-  template <o2::track::PID::ID pid>
-  using ResponseImplementation = o2::pid::tof::ExpTimes<Trks::iterator, pid>;
-  void processNoEvTime(Trks const& tracks, aod::Collisions const&)
-  {
-    constexpr auto responseEl = ResponseImplementation<PID::Electron>();
-    constexpr auto responseMu = ResponseImplementation<PID::Muon>();
-    constexpr auto responsePi = ResponseImplementation<PID::Pion>();
-    constexpr auto responseKa = ResponseImplementation<PID::Kaon>();
-    constexpr auto responsePr = ResponseImplementation<PID::Proton>();
-    constexpr auto responseDe = ResponseImplementation<PID::Deuteron>();
-    constexpr auto responseTr = ResponseImplementation<PID::Triton>();
-    constexpr auto responseHe = ResponseImplementation<PID::Helium3>();
-    constexpr auto responseAl = ResponseImplementation<PID::Alpha>();
-
-    // Check and fill enabled tables
-    auto makeTable = [&tracks](const Configurable<int>& flag, auto& table, const DetectorResponse& response, const auto& responsePID) {
-      if (flag.value == 1) {
-        // Prepare memory for enabled tables
-        table.reserve(tracks.size());
-        for (auto const& trk : tracks) { // Loop on Tracks
-          aod::pidutils::packInTable<aod::pidtof_tiny::binning>(responsePID.GetSeparation(response, trk),
-                                                                table);
-        }
-      }
-    };
-    makeTable(pidEl, tablePIDEl, response, responseEl);
-    makeTable(pidMu, tablePIDMu, response, responseMu);
-    makeTable(pidPi, tablePIDPi, response, responsePi);
-    makeTable(pidKa, tablePIDKa, response, responseKa);
-    makeTable(pidPr, tablePIDPr, response, responsePr);
-    makeTable(pidDe, tablePIDDe, response, responseDe);
-    makeTable(pidTr, tablePIDTr, response, responseTr);
-    makeTable(pidHe, tablePIDHe, response, responseHe);
-    makeTable(pidAl, tablePIDAl, response, responseAl);
-  }
-
-  PROCESS_SWITCH(tofPid, processNoEvTime, "Produce TOF response without TOF event time, standard for Run 2", true);
 };
 
 WorkflowSpec defineDataProcessing(ConfigContext const& cfgc)
@@ -249,5 +212,6 @@ WorkflowSpec defineDataProcessing(ConfigContext const& cfgc)
   if (cfgc.options().get<int>("add-qa")) {
     workflow.push_back(adaptAnalysisTask<tofPidQa>(cfgc));
   }
+
   return workflow;
 }
