@@ -26,7 +26,7 @@
 #include "Framework/ASoAHelpers.h"
 #include "Framework/HistogramRegistry.h"
 
-#include "Common/Core/PID/PIDResponse.h"
+#include "Common/DataModel/PIDResponse.h"
 #include "Common/DataModel/EventSelection.h"
 #include "Common/DataModel/Centrality.h"
 #include "Common/DataModel/Multiplicity.h"
@@ -129,13 +129,17 @@ struct LfTreeCreatorNuclei {
       if constexpr (isMC) { // Filling MC reco information
         if (track.has_mcParticle()) {
           const auto& particle = track.mcParticle();
-          tableCandidateMC(particle.pdgCode());
+          tableCandidateMC(particle.pdgCode(),
+                           particle.isPhysicalPrimary(),
+                           particle.producedByGenerator());
           continue;
         }
-        tableCandidateMC(0);
+        tableCandidateMC(0, -1, -1);
       }
     }
   }
+
+  Preslice<soa::Filtered<TrackCandidates>> perCollision = aod::track::collisionId;
 
   void processData(soa::Filtered<EventCandidates> const& collisions,
                    soa::Filtered<TrackCandidates> const& tracks, aod::BCs const&)
@@ -144,10 +148,11 @@ struct LfTreeCreatorNuclei {
       if (useEvsel && !collision.sel8()) {
         continue;
       }
-      const auto& tracksInCollision = tracks.sliceBy(aod::track::collisionId, collision.globalIndex());
+      const auto& tracksInCollision = tracks.sliceBy(perCollision, collision.globalIndex());
       fillForOneEvent<false>(collision, tracksInCollision);
     }
   }
+
   PROCESS_SWITCH(LfTreeCreatorNuclei, processData, "process Data", true);
 
   void processMC(soa::Filtered<soa::Join<EventCandidates, aod::McCollisionLabels>> const& collisions,
@@ -156,12 +161,13 @@ struct LfTreeCreatorNuclei {
   {
     for (const auto& collision : collisions) {
       if (useEvsel && !collision.sel8()) {
-        return;
+        continue;
       }
-      const auto& tracksInCollision = tracks.sliceBy(aod::track::collisionId, collision.globalIndex());
+      const auto& tracksInCollision = tracks.sliceBy(perCollision, collision.globalIndex());
       fillForOneEvent<true>(collision, tracksInCollision);
     }
   }
+
   PROCESS_SWITCH(LfTreeCreatorNuclei, processMC, "process MC", false);
 };
 

@@ -51,6 +51,8 @@ enum EventSelectionFlags {
   kNoPileupInMultBins, // no pileup according to multiplicity-differential pileup checks
   kNoPileupMV,         // no pileup according to multi-vertexer
   kNoPileupTPC,        // no pileup in TPC
+  kIsTriggerTVX,       // FT0 vertex (acceptable FT0C-FT0A time difference) at trigger level
+  kIsINT1,             // SPDGFO >= 1 || V0A || V0C
   kNsel                // counter
 };
 
@@ -63,7 +65,7 @@ using namespace evsel;
 class EventSelectionParams
 {
  public:
-  EventSelectionParams(int system = 0);
+  EventSelectionParams(int system = 0, int run = 2);
   void DisableOutOfBunchPileupCuts();
   void SetOnVsOfParams(float newV0MOnVsOfA, float newV0MOnVsOfB, float newSPDOnVsOfA, float newSPDOnVsOfB);
   bool* GetSelection(int iSelection);
@@ -133,7 +135,7 @@ class EventSelectionParams
   float fV0CasymA = -25.f;
   float fV0CasymB = 0.15f;
 
-  ClassDefNV(EventSelectionParams, 1)
+  ClassDefNV(EventSelectionParams, 3)
 };
 
 #endif

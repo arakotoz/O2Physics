@@ -31,6 +31,9 @@ using namespace o2::framework;
 using namespace o2::framework::expressions;
 
 AxisSpec PtAxis = {1001, -0.005, 10.005};
+AxisSpec DeltaZAxis = {61, -6.1, 6.1};
+AxisSpec MultAxis = {301, -0.5, 300.5};
+AxisSpec ZAxis = {301, -30.1, 30.1};
 
 using MFTTracksLabeled = soa::Join<o2::aod::MFTTracks, aod::McMFTTrackLabels>;
 
@@ -39,15 +42,18 @@ struct PseudorapidityDensityMFT {
 
   Configurable<bool> useEvSel{"useEvSel", true, "use event selection"};
 
+  Configurable<bool> useZDiffCut{"useZDiffCut", true, "use Z difference cut"};
+  Configurable<float> maxZDiff{"maxZDiff", 1.0f, "max allowed Z difference for reconstruced collisions (cm)"};
+
   HistogramRegistry registry{
     "registry",
     {
-      {"EventsNtrkZvtx", "; N_{trk}; Z_{vtx}; events", {HistType::kTH2F, {{301, -0.5, 300.5}, {201, -20.1, 20.1}}}}, //
-      {"TracksEtaZvtx", "; #eta; Z_{vtx}; tracks", {HistType::kTH2F, {{18, -4.6, -1.}, {201, -20.1, 20.1}}}},        //
-      {"TracksPhiEta", "; #varphi; #eta; tracks", {HistType::kTH2F, {{600, 0, 2 * M_PI}, {18, -4.6, -1.}}}},         //
-      {"TracksPtEta", " ; p_{T} (GeV/c); #eta", {HistType::kTH2F, {PtAxis, {18, -4.6, -1.}}}},                       //
-      {"EventSelection", ";status;events", {HistType::kTH1F, {{7, 0.5, 7.5}}}}                                       //
-    }                                                                                                                //
+      {"EventsNtrkZvtx", "; N_{trk}; Z_{vtx}; events", {HistType::kTH2F, {{301, -0.5, 300.5}, ZAxis}}},      //
+      {"TracksEtaZvtx", "; #eta; Z_{vtx}; tracks", {HistType::kTH2F, {{18, -4.6, -1.}, ZAxis}}},             //
+      {"TracksPhiEta", "; #varphi; #eta; tracks", {HistType::kTH2F, {{600, 0, 2 * M_PI}, {18, -4.6, -1.}}}}, //
+      {"TracksPtEta", " ; p_{T} (GeV/c); #eta", {HistType::kTH2F, {PtAxis, {18, -4.6, -1.}}}},               //
+      {"EventSelection", ";status;events", {HistType::kTH1F, {{7, 0.5, 7.5}}}}                               //
+    }                                                                                                        //
   };
 
   void init(InitContext&)
@@ -63,16 +69,18 @@ struct PseudorapidityDensityMFT {
     x->SetBinLabel(7, "BCs with pile-up/splitting");
 
     if (doprocessGen) {
-      registry.add({"EventsNtrkZvtxGen", "; N_{trk}; Z_{vtx}; events", {HistType::kTH2F, {{301, -0.5, 300.5}, {201, -20.1, 20.1}}}});
-      registry.add({"EventsNtrkZvtxGen_t", "; N_{trk}; Z_{vtx}; events", {HistType::kTH2F, {{301, -0.5, 300.5}, {201, -20.1, 20.1}}}});
-      registry.add({"TracksEtaZvtxGen", "; #eta; Z_{vtx}; tracks", {HistType::kTH2F, {{18, -4.6, -1.}, {201, -20.1, 20.1}}}});
-      registry.add({"TracksEtaZvtxGen_t", "; #eta; Z_{vtx}; tracks", {HistType::kTH2F, {{18, -4.6, -1.}, {201, -20.1, 20.1}}}});
+      registry.add({"EventsNtrkZvtxGen", "; N_{trk}; Z_{vtx}; events", {HistType::kTH2F, {{301, -0.5, 300.5}, ZAxis}}});
+      registry.add({"EventsNtrkZvtxGen_t", "; N_{trk}; Z_{vtx}; events", {HistType::kTH2F, {{301, -0.5, 300.5}, ZAxis}}});
+      registry.add({"TracksEtaZvtxGen", "; #eta; Z_{vtx}; tracks", {HistType::kTH2F, {{18, -4.6, -1.}, ZAxis}}});
+      registry.add({"TracksEtaZvtxGen_t", "; #eta; Z_{vtx}; tracks", {HistType::kTH2F, {{18, -4.6, -1.}, ZAxis}}});
       registry.add({"TracksPhiEtaGen", "; #varphi; #eta; tracks", {HistType::kTH2F, {{600, 0, 2 * M_PI}, {18, -4.6, -1.}}}});
       registry.add({"TracksToPartPtEta", " ; p_{T} (GeV/c); #eta", {HistType::kTH2F, {PtAxis, {18, -4.6, -1.}}}}); //
       registry.add({"TracksPtEtaGen", " ; p_{T} (GeV/c); #eta", {HistType::kTH2F, {PtAxis, {18, -4.6, -1.}}}});
       registry.add({"TracksPtEtaGen_t", " ; p_{T} (GeV/c); #eta", {HistType::kTH2F, {PtAxis, {18, -4.6, -1.}}}});
       registry.add({"EventEfficiency", "; status; events", {HistType::kTH1F, {{5, 0.5, 5.5}}}});
-      registry.add({"NotFoundEventZvtx", " ; Z_{vtx}", {HistType::kTH1F, {{201, -20.1, 20.1}}}});
+      registry.add({"NotFoundEventZvtx", " ; Z_{vtx}", {HistType::kTH1F, {ZAxis}}});
+      registry.add({"EventsZposDiff", " ; Z_{rec} - Z_{gen} (cm)", {HistType::kTH1F, {DeltaZAxis}}});
+      registry.add({"EventsSplitMult", " ; N_{gen}", {HistType::kTH1F, {MultAxis}}});
 
       auto heff = registry.get<TH1>(HIST("EventEfficiency"));
       x = heff->GetXaxis();
@@ -114,6 +122,8 @@ struct PseudorapidityDensityMFT {
 
   PROCESS_SWITCH(PseudorapidityDensityMFT, processTagging, "Collect event sample stats", true);
 
+  Partition<aod::MFTTracks> sample = (aod::fwdtrack::eta < -2.8f) && (aod::fwdtrack::eta > -3.2f);
+
   void process(soa::Join<aod::Collisions, aod::EvSels>::iterator const& collision, aod::MFTTracks const& tracks)
   {
     registry.fill(HIST("EventSelection"), 1.);
@@ -121,9 +131,9 @@ struct PseudorapidityDensityMFT {
       registry.fill(HIST("EventSelection"), 2.);
       auto z = collision.posZ();
 
-      auto groupedTracks = tracks.sliceBy(o2::aod::fwdtrack::collisionId, collision.globalIndex());
+      auto perCollisionSample = sample->sliceByCached(o2::aod::fwdtrack::collisionId, collision.globalIndex());
 
-      registry.fill(HIST("EventsNtrkZvtx"), groupedTracks.size(), z);
+      registry.fill(HIST("EventsNtrkZvtx"), perCollisionSample.size(), z);
       for (auto& track : tracks) {
         registry.fill(HIST("TracksEtaZvtx"), track.eta(), z);
         float phi = track.phi();
@@ -136,31 +146,58 @@ struct PseudorapidityDensityMFT {
     }
   }
 
-  using Particles = aod::McParticles;
+  using Particles = soa::Filtered<aod::McParticles>;
   expressions::Filter primaries = (aod::mcparticle::flags & (uint8_t)o2::aod::mcparticle::enums::PhysicalPrimary) == (uint8_t)o2::aod::mcparticle::enums::PhysicalPrimary;
+  Partition<Particles> mcSample = (aod::mcparticle::eta < -2.8f) && (aod::mcparticle::eta > -3.2f);
 
-  void processGen(aod::McCollisions::iterator const& mcCollision, o2::soa::SmallGroups<soa::Join<aod::Collisions, aod::EvSels, aod::McCollisionLabels>> const& collisions, soa::Filtered<Particles> const& particles, aod::MFTTracks const& tracks)
+  void processGen(aod::McCollisions::iterator const& mcCollision, o2::soa::SmallGroups<soa::Join<aod::Collisions, aod::EvSels, aod::McCollisionLabels>> const& collisions, Particles const& particles, aod::MFTTracks const& tracks)
   {
     registry.fill(HIST("EventEfficiency"), 1.);
 
+    auto perCollisionMCSample = mcSample->sliceByCached(aod::mcparticle::mcCollisionId, mcCollision.globalIndex());
+    auto nCharged = 0;
+    for (auto& particle : perCollisionMCSample) {
+      auto charge = 0.;
+      auto p = pdg->GetParticle(particle.pdgCode());
+      if (p != nullptr) {
+        charge = p->Charge();
+      }
+      if (std::abs(charge) < 3.) {
+        continue;
+      }
+      nCharged++;
+    }
+    registry.fill(HIST("EventsNtrkZvtxGen_t"), nCharged, mcCollision.posZ());
+
     bool atLeastOne = false;
+    int moreThanOne = 0;
 
     LOGP(debug, "MC col {} has {} reco cols", mcCollision.globalIndex(), collisions.size());
     for (auto& collision : collisions) {
       registry.fill(HIST("EventEfficiency"), 3.);
       if (!useEvSel || (useEvSel && collision.sel8())) {
         atLeastOne = true;
-        auto groupedTracks = tracks.sliceBy(o2::aod::fwdtrack::collisionId, collision.globalIndex());
+        auto perCollisionSample = sample->sliceByCached(o2::aod::fwdtrack::collisionId, collision.globalIndex());
 
         registry.fill(HIST("EventEfficiency"), 4.);
 
-        registry.fill(HIST("EventsNtrkZvtxGen"), groupedTracks.size(), collision.posZ());
+        registry.fill(HIST("EventsZposDiff"), collision.posZ() - mcCollision.posZ());
+        if (useZDiffCut) {
+          if (std::abs(collision.posZ() - mcCollision.posZ()) > maxZDiff) {
+            continue;
+          }
+        }
+        registry.fill(HIST("EventsNtrkZvtxGen"), perCollisionSample.size(), collision.posZ());
+        ++moreThanOne;
       }
     }
     if (collisions.size() == 0) {
       registry.fill(HIST("NotFoundEventZvtx"), mcCollision.posZ());
     }
-    auto nCharged = 0;
+    if (moreThanOne > 1) {
+      registry.fill(HIST("EventsSplitMult"), nCharged);
+    }
+
     for (auto& particle : particles) {
       auto p = pdg->GetParticle(particle.pdgCode());
       auto charge = 0;
@@ -178,10 +215,7 @@ struct PseudorapidityDensityMFT {
       }
       registry.fill(HIST("TracksPhiEtaGen"), particle.phi(), particle.eta());
       registry.fill(HIST("TracksPtEtaGen_t"), particle.pt(), particle.eta());
-
-      nCharged++;
     }
-    registry.fill(HIST("EventsNtrkZvtxGen_t"), nCharged, mcCollision.posZ());
   }
 
   PROCESS_SWITCH(PseudorapidityDensityMFT, processGen, "Process generator-level info", false);
@@ -195,6 +229,9 @@ struct PseudorapidityDensityMFT {
           continue;
         }
         auto particle = track.mcParticle();
+        if (!particle.isPhysicalPrimary()) {
+          continue;
+        }
         registry.fill(HIST("TracksToPartPtEta"), particle.pt(), particle.eta());
       }
     }

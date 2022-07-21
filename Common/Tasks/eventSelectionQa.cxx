@@ -17,6 +17,7 @@
 #include <CCDB/BasicCCDBManager.h>
 #include "Framework/HistogramRegistry.h"
 #include "CommonDataFormat/BunchFilling.h"
+#include "DataFormatsParameters/GRPLHCIFData.h"
 #include "TH1F.h"
 #include "TH2F.h"
 using namespace o2::framework;
@@ -218,7 +219,7 @@ struct EventSelectionQaTask {
   }
 
   void processRun2(
-    soa::Join<aod::Collisions, aod::EvSels> cols,
+    soa::Join<aod::Collisions, aod::EvSels> const& cols,
     BCsRun2 const& bcs,
     aod::Zdcs const& zdcs,
     aod::FV0As const& fv0as,
@@ -226,6 +227,7 @@ struct EventSelectionQaTask {
     aod::FT0s const& ft0s,
     aod::FDDs const& fdds)
   {
+    bool isINT1period = 0;
     if (!applySelection) {
       auto first_bc = bcs.iteratorAt(0);
       EventSelectionParams* par = ccdb->getForTimeStamp<EventSelectionParams>("EventSelection/EventSelectionParams", first_bc.timestamp());
@@ -233,6 +235,7 @@ struct EventSelectionQaTask {
       for (int i = 0; i < kNsel; i++) {
         histos.get<TH1>(HIST("hSelMask"))->SetBinContent(i + 1, applySelection[i]);
       }
+      isINT1period = first_bc.runNumber() <= 136377 || (first_bc.runNumber() >= 144871 && first_bc.runNumber() <= 159582);
     }
 
     // bc-based event selection qa
@@ -244,19 +247,24 @@ struct EventSelectionQaTask {
 
     // collision-based event selection qa
     for (auto& col : cols) {
+      auto selection = col.selection();
+      bool sel1 = selection[kIsINT1] & selection[kNoBGV0A] & selection[kNoBGV0C] & selection[kNoTPCLaserWarmUp] & selection[kNoTPCHVdip];
+
       for (int iAlias = 0; iAlias < kNaliases; iAlias++) {
         if (!col.alias()[iAlias]) {
           continue;
         }
         histos.fill(HIST("hColCounterAll"), iAlias, 1);
-        if (!col.sel7()) {
-          continue;
+        if ((!isINT1period && col.sel7()) || (isINT1period && sel1)) {
+          histos.fill(HIST("hColCounterAcc"), iAlias, 1);
         }
-        histos.fill(HIST("hColCounterAcc"), iAlias, 1);
       }
 
+      bool mb = isMC;
+      mb |= !isINT1period && col.alias()[kINT7];
+      mb |= isINT1period && col.alias()[kINT1];
       // further checks just on minimum bias triggers
-      if (!isMC && !col.alias()[kINT7]) {
+      if (!mb) {
         continue;
       }
       for (int i = 0; i < kNsel; i++) {
@@ -353,7 +361,10 @@ struct EventSelectionQaTask {
       histos.fill(HIST("hV0C012vsTklCol"), nTracklets, multRingV0C012);
 
       // filling plots for accepted events
-      if (!col.sel7()) {
+      bool accepted = 0;
+      accepted |= !isINT1period & col.sel7();
+      accepted |= isINT1period & sel1;
+      if (!accepted) {
         continue;
       }
 
@@ -385,8 +396,10 @@ struct EventSelectionQaTask {
   }
   PROCESS_SWITCH(EventSelectionQaTask, processRun2, "Process Run2 event selection QA", true);
 
+  Preslice<aod::FullTracks> perCollision = aod::track::collisionId;
+
   void processRun3(
-    soa::Join<aod::Collisions, aod::EvSels> cols,
+    soa::Join<aod::Collisions, aod::EvSels> const& cols,
     aod::FullTracks const& tracks,
     BCsRun3 const& bcs,
     aod::Zdcs const& zdcs,
@@ -397,9 +410,9 @@ struct EventSelectionQaTask {
     int runNumber = bcs.iteratorAt(0).runNumber();
     if (runNumber != lastRunNumber && runNumber >= 500000) { // using BC filling scheme for data only
       lastRunNumber = runNumber;
-      auto bf = ccdb->getForTimeStamp<o2::BunchFilling>("GLO/GRP/BunchFilling", bcs.iteratorAt(0).timestamp());
-      beamPatternA = bf->getBeamPattern(0);
-      beamPatternC = bf->getBeamPattern(1);
+      auto grplhcif = ccdb->getForTimeStamp<o2::parameters::GRPLHCIFData>("GLO/Config/GRPLHCIF", bcs.iteratorAt(0).timestamp());
+      beamPatternA = grplhcif->getBunchFilling().getBeamPattern(0);
+      beamPatternC = grplhcif->getBunchFilling().getBeamPattern(1);
       bcPatternA = beamPatternA & ~beamPatternC;
       bcPatternC = ~beamPatternA & beamPatternC;
       bcPatternB = beamPatternA & beamPatternC;
@@ -575,7 +588,7 @@ struct EventSelectionQaTask {
       histos.fill(HIST("hOrbitCol"), orbit);
       histos.fill(HIST("hBcCol"), localBC);
 
-      auto tracksGrouped = tracks.sliceBy(aod::track::collisionId, col.globalIndex());
+      auto tracksGrouped = tracks.sliceBy(perCollision, col.globalIndex());
       int nTPCtracks = 0;
       int nTOFtracks = 0;
       for (auto& track : tracksGrouped) {

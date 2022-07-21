@@ -51,45 +51,41 @@
 #include "Framework/runDataProcessing.h"
 #include "Framework/AnalysisTask.h"
 
-#include "EventFiltering/PWGUD/diffHelpers.h"
-#include "PWGUD/DataModel/DGCandidates.h"
+#include "EventFiltering/PWGUD/DGHelpers.h"
+#include "PWGUD/Core/UDHelperFunctions.h"
+#include "PWGUD/DataModel/UDTables.h"
 
 using namespace o2;
 using namespace o2::framework;
 using namespace o2::framework::expressions;
 
-using TCs = soa::Join<aod::Tracks, aod::TracksExtra, aod::TrackSelection,
-                      aod::pidTPCFullEl, aod::pidTPCFullMu, aod::pidTPCFullPi, aod::pidTPCFullKa, aod::pidTPCFullPr,
-                      aod::TOFSignal, aod::pidTOFFullEl, aod::pidTOFFullMu, aod::pidTOFFullPi, aod::pidTOFFullKa, aod::pidTOFFullPr>;
-
-template <typename TCs>
-int8_t netCharge(TCs tracks)
-{
-  int8_t nch = 0;
-  for (auto track : tracks) {
-    if (track.isPVContributor()) {
-      nch += track.sign();
-    }
-  }
-  return nch;
-}
-
 struct DGCandProducer {
 
-  // get a cutHolder
-  cutHolder diffCuts = cutHolder();
-  MutableConfigurable<cutHolder> DGCuts{"DGCuts", {}, "DG event cuts"};
+  // get a DGCutparHolder
+  DGCutparHolder diffCuts = DGCutparHolder();
+  MutableConfigurable<DGCutparHolder> DGCuts{"DGCuts", {}, "DG event cuts"};
 
   // DG selector
   DGSelector dgSelector;
 
   void init(InitContext&)
   {
-    diffCuts = (cutHolder)DGCuts;
+    diffCuts = (DGCutparHolder)DGCuts;
   }
 
-  Produces<aod::DGCandidates> outputCollisions;
-  Produces<aod::DGTracks> outputTracks;
+  Produces<aod::UDCollisions> outputCollisions;
+  Produces<aod::UDTracks> outputTracks;
+  Produces<aod::UDTracksPID> outputTracksPID;
+  Produces<aod::UDTrackCollisionIDs> outputTrackColIDs;
+
+  // helper struct
+  struct FT0Info {
+    float amplitudeA = -1;
+    float amplitudeC = -1;
+    float timeA = -999.;
+    float timeC = -999.;
+    uint8_t triggerMask = 0;
+  };
 
   using CCs = soa::Join<aod::Collisions, aod::EvSels>;
   using CC = CCs::iterator;
@@ -120,18 +116,21 @@ struct DGCandProducer {
 
     // save DG candidates
     if (isDGEvent == 0) {
+      FT0Info ft0Info;
 
       // update DGCandidates tables
       outputCollisions(bc.runNumber(), bc.timestamp(),
                        collision.posX(), collision.posY(), collision.posZ(),
-                       collision.numContrib(), netCharge(tracks));
+                       collision.numContrib(), netCharge(tracks), rPVtrwTOF(tracks, collision.numContrib()),
+                       ft0Info.amplitudeA, ft0Info.amplitudeC, ft0Info.timeA, ft0Info.timeC, ft0Info.triggerMask);
 
       // update DGTracks tables
       for (auto& track : tracks) {
         if (track.isPVContributor()) {
-          outputTracks(outputCollisions.lastIndex(), track.pt(), track.eta(), track.phi(), track.sign(),
-                       track.tpcNSigmaEl(), track.tpcNSigmaMu(), track.tpcNSigmaPi(), track.tpcNSigmaKa(), track.tpcNSigmaPr(),
-                       track.tofNSigmaEl(), track.tofNSigmaMu(), track.tofNSigmaPi(), track.tofNSigmaKa(), track.tofNSigmaPr());
+          outputTracks(track.px(), track.py(), track.pz(), track.sign(), bc.globalBC(), track.trackTime(), track.trackTimeRes());
+          outputTrackColIDs(outputCollisions.lastIndex());
+          outputTracksPID(track.tpcNSigmaEl(), track.tpcNSigmaMu(), track.tpcNSigmaPi(), track.tpcNSigmaKa(), track.tpcNSigmaPr(),
+                          track.tofNSigmaEl(), track.tofNSigmaMu(), track.tofNSigmaPi(), track.tofNSigmaKa(), track.tofNSigmaPr());
         }
       }
     }

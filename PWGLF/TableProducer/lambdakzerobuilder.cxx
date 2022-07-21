@@ -66,7 +66,7 @@ using namespace o2::framework;
 using namespace o2::framework::expressions;
 using std::array;
 
-//use parameters + cov mat non-propagated, aux info + (extension propagated)
+// use parameters + cov mat non-propagated, aux info + (extension propagated)
 using FullTracksExt = soa::Join<aod::Tracks, aod::TracksExtra, aod::TracksCov, aod::TracksDCA>;
 using FullTracksExtMC = soa::Join<FullTracksExt, aod::McTrackLabels>;
 using FullTracksExtIU = soa::Join<aod::TracksIU, aod::TracksExtra, aod::TracksCovIU, aod::TracksDCA>;
@@ -98,8 +98,8 @@ struct lambdakzeroBuilder {
 
   int mRunNumber;
   float d_bz;
-  float maxSnp;  //max sine phi for propagation
-  float maxStep; //max step size (cm) for propagation
+  float maxSnp;  // max sine phi for propagation
+  float maxStep; // max step size (cm) for propagation
 
   // for debugging
 #ifdef MY_DEBUG
@@ -115,8 +115,7 @@ struct lambdakzeroBuilder {
     "registry",
     {
       {"hEventCounter", "hEventCounter", {HistType::kTH1F, {{1, 0.0f, 1.0f}}}},
-      {"hV0Candidate", "hV0Candidate", {HistType::kTH1F, {{2, 0.0f, 2.0f}}}},
-      {"hGoodIndices", "hGoodIndices", {HistType::kTH1F, {{4, 0.0f, 4.0f}}}},
+      {"hV0Criteria", "hV0Criteria", {HistType::kTH1F, {{10, 0.0f, 10.0f}}}},
     },
   };
 
@@ -142,8 +141,8 @@ struct lambdakzeroBuilder {
     // using namespace analysis::lambdakzerobuilder;
     mRunNumber = 0;
     d_bz = 0;
-    maxSnp = 0.85f;  //could be changed later
-    maxStep = 2.00f; //could be changed later
+    maxSnp = 0.85f;  // could be changed later
+    maxStep = 2.00f; // could be changed later
 
     ccdb->setURL("http://alice-ccdb.cern.ch");
     ccdb->setCaching(true);
@@ -160,6 +159,13 @@ struct lambdakzeroBuilder {
       o2::parameters::GRPObject* grpo = ccdb->getForTimeStamp<o2::parameters::GRPObject>("GLO/GRP/GRP", run3grp_timestamp);
       o2::base::Propagator::initFieldFromGRP(grpo);
       o2::base::Propagator::Instance()->setMatLUT(lut);
+    }
+
+    if (doprocessRun3 && doprocessRun2) {
+      LOGF(fatal, "processRun3 and processRun2 are both set to true; try again with only one of them set to true");
+    }
+    if (!doprocessRun3 && !doprocessRun2) {
+      LOGF(fatal, "processRun3 nor processRun2 are both set to false; try again with only one of them set to false");
     }
   }
 
@@ -227,7 +233,8 @@ struct lambdakzeroBuilder {
 #endif
       MY_DEBUG_MSG(isK0SfromLc, LOG(info) << "V0 builder: found K0S from Lc, posTrack --> " << labelPos << ", negTrack --> " << labelNeg);
 
-      registry.fill(HIST("hGoodIndices"), 0.5);
+      // value 0.5: any considered V0
+      registry.fill(HIST("hV0Criteria"), 0.5);
       if (isRun2) {
         if (!(V0.posTrack_as<MyTracks>().trackType() & o2::aod::track::TPCrefit)) {
           MY_DEBUG_MSG(isK0SfromLc, LOG(info) << "posTrack " << labelPos << " has no TPC refit");
@@ -240,7 +247,8 @@ struct lambdakzeroBuilder {
           continue; // TPC refit
         }
       }
-      registry.fill(HIST("hGoodIndices"), 1.5);
+      // Passes TPC refit
+      registry.fill(HIST("hV0Criteria"), 1.5);
       if (V0.posTrack_as<MyTracks>().tpcNClsCrossedRows() < mincrossedrows) {
         MY_DEBUG_MSG(isK0SfromLc, LOG(info) << "posTrack " << labelPos << " has " << V0.posTrack_as<MyTracks>().tpcNClsCrossedRows() << " crossed rows, cut at " << mincrossedrows);
         v0dataLink(-1);
@@ -251,7 +259,8 @@ struct lambdakzeroBuilder {
         v0dataLink(-1);
         continue;
       }
-      registry.fill(HIST("hGoodIndices"), 2.5);
+      // passes crossed rows
+      registry.fill(HIST("hV0Criteria"), 2.5);
       if (fabs(V0.posTrack_as<MyTracks>().dcaXY()) < dcapostopv) {
         MY_DEBUG_MSG(isK0SfromLc, LOG(info) << "posTrack " << labelPos << " has dcaXY " << V0.posTrack_as<MyTracks>().dcaXY() << " , cut at " << dcanegtopv);
         v0dataLink(-1);
@@ -263,7 +272,8 @@ struct lambdakzeroBuilder {
         continue;
       }
       MY_DEBUG_MSG(isK0SfromLc, LOG(info) << "Filling good indices: posTrack --> " << labelPos << ", negTrack --> " << labelNeg);
-      registry.fill(HIST("hGoodIndices"), 3.5);
+      // passes DCAxy
+      registry.fill(HIST("hV0Criteria"), 3.5);
 
       // Candidate building part
       std::array<float, 3> pos = {0.};
@@ -278,8 +288,6 @@ struct lambdakzeroBuilder {
 
       MY_DEBUG_MSG(isK0SfromLc, LOG(info) << "labelPos = " << labelPos << ", labelNeg = " << labelNeg);
 
-      registry.fill(HIST("hV0Candidate"), 0.5);
-
       auto pTrack = getTrackParCov(V0.posTrack_as<MyTracks>());
       auto nTrack = getTrackParCov(V0.negTrack_as<MyTracks>());
 
@@ -288,6 +296,9 @@ struct lambdakzeroBuilder {
         v0dataLink(-1);
         continue;
       }
+
+      // passes diff coll check
+      registry.fill(HIST("hV0Criteria"), 4.5);
 
       // Act on copies for minimization
       auto pTrackCopy = o2::track::TrackParCov(pTrack);
@@ -300,6 +311,9 @@ struct lambdakzeroBuilder {
         v0dataLink(-1);
         continue;
       }
+
+      // passes V0 fitter minimization successfully
+      registry.fill(HIST("hV0Criteria"), 5.5);
 
       double finalXpos = fitter.getTrack(0).getX();
       double finalXneg = fitter.getTrack(1).getX();
@@ -324,6 +338,9 @@ struct lambdakzeroBuilder {
         continue;
       }
 
+      // Passes step 2 of V0 fitter
+      registry.fill(HIST("hV0Criteria"), 6.5);
+
       pTrack.getPxPyPzGlo(pvec0);
       nTrack.getPxPyPzGlo(pvec1);
 
@@ -341,12 +358,18 @@ struct lambdakzeroBuilder {
         continue;
       }
 
+      // Passes DCA between daughters check
+      registry.fill(HIST("hV0Criteria"), 7.5);
+
       auto V0CosinePA = RecoDecay::cpa(array{collision.posX(), collision.posY(), collision.posZ()}, array{pos[0], pos[1], pos[2]}, array{pvec0[0] + pvec1[0], pvec0[1] + pvec1[1], pvec0[2] + pvec1[2]});
       if (V0CosinePA < v0cospa) {
         MY_DEBUG_MSG(isK0SfromLc, LOG(info) << "posTrack --> " << labelPos << ", negTrack --> " << labelNeg << " will be skipped due to CPA cut");
         v0dataLink(-1);
         continue;
       }
+
+      // Passes CosPA check
+      registry.fill(HIST("hV0Criteria"), 8.5);
 
       auto V0radius = RecoDecay::sqrtSumOfSquares(pos[0], pos[1]); // probably find better name to differentiate the cut from the variable
       if (V0radius < v0radius) {
@@ -355,9 +378,11 @@ struct lambdakzeroBuilder {
         continue;
       }
 
+      // Passes radius check
+      registry.fill(HIST("hV0Criteria"), 9.5);
+
       MY_DEBUG_MSG(isK0SfromLc, LOG(info) << "in builder 1, keeping K0S candidate: posTrack --> " << labelPos << ", negTrack --> " << labelNeg);
 
-      registry.fill(HIST("hV0Candidate"), 1.5);
       v0data(
         V0.posTrackId(),
         V0.negTrackId(),
@@ -410,7 +435,8 @@ struct lambdakzeroBuilder {
 #endif
       MY_DEBUG_MSG(isK0SfromLc, LOG(info) << "V0 builder: found K0S from Lc, posTrack --> " << labelPos << ", negTrack --> " << labelNeg);
 
-      registry.fill(HIST("hGoodIndices"), 0.5);
+      // value 0.5: any considered V0
+      registry.fill(HIST("hV0Criteria"), 0.5);
       if (isRun2) {
         if (!(V0.posTrack_as<MyTracksIU>().trackType() & o2::aod::track::TPCrefit)) {
           MY_DEBUG_MSG(isK0SfromLc, LOG(info) << "posTrack " << labelPos << " has no TPC refit");
@@ -423,7 +449,8 @@ struct lambdakzeroBuilder {
           continue; // TPC refit
         }
       }
-      registry.fill(HIST("hGoodIndices"), 1.5);
+      // Passes TPC refit
+      registry.fill(HIST("hV0Criteria"), 1.5);
       if (V0.posTrack_as<MyTracksIU>().tpcNClsCrossedRows() < mincrossedrows) {
         MY_DEBUG_MSG(isK0SfromLc, LOG(info) << "posTrack " << labelPos << " has " << V0.posTrack_as<MyTracksIU>().tpcNClsCrossedRows() << " crossed rows, cut at " << mincrossedrows);
         v0dataLink(-1);
@@ -434,7 +461,8 @@ struct lambdakzeroBuilder {
         v0dataLink(-1);
         continue;
       }
-      registry.fill(HIST("hGoodIndices"), 2.5);
+      // passes crossed rows
+      registry.fill(HIST("hV0Criteria"), 2.5);
       if (fabs(V0.posTrack_as<MyTracksIU>().dcaXY()) < dcapostopv) {
         MY_DEBUG_MSG(isK0SfromLc, LOG(info) << "posTrack " << labelPos << " has dcaXY " << V0.posTrack_as<MyTracksIU>().dcaXY() << " , cut at " << dcanegtopv);
         v0dataLink(-1);
@@ -446,7 +474,8 @@ struct lambdakzeroBuilder {
         continue;
       }
       MY_DEBUG_MSG(isK0SfromLc, LOG(info) << "Filling good indices: posTrack --> " << labelPos << ", negTrack --> " << labelNeg);
-      registry.fill(HIST("hGoodIndices"), 3.5);
+      // passes DCAxy
+      registry.fill(HIST("hV0Criteria"), 3.5);
 
       // Candidate building part
       std::array<float, 3> pos = {0.};
@@ -461,8 +490,6 @@ struct lambdakzeroBuilder {
 
       MY_DEBUG_MSG(isK0SfromLc, LOG(info) << "labelPos = " << labelPos << ", labelNeg = " << labelNeg);
 
-      registry.fill(HIST("hV0Candidate"), 0.5);
-
       auto pTrack = getTrackParCov(V0.posTrack_as<MyTracksIU>());
       auto nTrack = getTrackParCov(V0.negTrack_as<MyTracksIU>());
 
@@ -471,6 +498,9 @@ struct lambdakzeroBuilder {
         v0dataLink(-1);
         continue;
       }
+
+      // passes diff coll check
+      registry.fill(HIST("hV0Criteria"), 4.5);
 
       // Act on copies for minimization
       auto pTrackCopy = o2::track::TrackParCov(pTrack);
@@ -483,6 +513,9 @@ struct lambdakzeroBuilder {
         v0dataLink(-1);
         continue;
       }
+
+      // passes V0 fitter minimization successfully
+      registry.fill(HIST("hV0Criteria"), 5.5);
 
       double finalXpos = fitter.getTrack(0).getX();
       double finalXneg = fitter.getTrack(1).getX();
@@ -507,6 +540,9 @@ struct lambdakzeroBuilder {
         continue;
       }
 
+      // Passes step 2 of V0 fitter
+      registry.fill(HIST("hV0Criteria"), 6.5);
+
       pTrack.getPxPyPzGlo(pvec0);
       nTrack.getPxPyPzGlo(pvec1);
 
@@ -524,12 +560,18 @@ struct lambdakzeroBuilder {
         continue;
       }
 
+      // Passes DCA between daughters check
+      registry.fill(HIST("hV0Criteria"), 7.5);
+
       auto V0CosinePA = RecoDecay::cpa(array{collision.posX(), collision.posY(), collision.posZ()}, array{pos[0], pos[1], pos[2]}, array{pvec0[0] + pvec1[0], pvec0[1] + pvec1[1], pvec0[2] + pvec1[2]});
       if (V0CosinePA < v0cospa) {
         MY_DEBUG_MSG(isK0SfromLc, LOG(info) << "posTrack --> " << labelPos << ", negTrack --> " << labelNeg << " will be skipped due to CPA cut");
         v0dataLink(-1);
         continue;
       }
+
+      // Passes CosPA check
+      registry.fill(HIST("hV0Criteria"), 8.5);
 
       auto V0radius = RecoDecay::sqrtSumOfSquares(pos[0], pos[1]); // probably find better name to differentiate the cut from the variable
       if (V0radius < v0radius) {
@@ -538,9 +580,11 @@ struct lambdakzeroBuilder {
         continue;
       }
 
+      // Passes radius check
+      registry.fill(HIST("hV0Criteria"), 9.5);
+
       MY_DEBUG_MSG(isK0SfromLc, LOG(info) << "in builder 1, keeping K0S candidate: posTrack --> " << labelPos << ", negTrack --> " << labelNeg);
 
-      registry.fill(HIST("hV0Candidate"), 1.5);
       v0data(
         V0.posTrackId(),
         V0.negTrackId(),
