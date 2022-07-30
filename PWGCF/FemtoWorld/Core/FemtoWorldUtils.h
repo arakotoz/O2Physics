@@ -14,8 +14,8 @@
 ///
 /// \author Luca Barioglio, TU München, luca.barioglio@cern.ch
 
-#ifndef ANALYSIS_TASKS_PWGCF_FEMTOWORLD_UTILS_H_
-#define ANALYSIS_TASKS_PWGCF_FEMTOWORLD_UTILS_H_
+#ifndef FEMTOWORLDUTILS_H_
+#define FEMTOWORLDUTILS_H_
 
 #include "Framework/ASoAHelpers.h"
 #include "PWGCF/DataModel/FemtoDerived.h"
@@ -98,25 +98,6 @@ bool isFullPIDSelected(aod::femtodreamparticle::cutContainerType const& pidCut, 
   }
   return pidSelection;
 };
-
-/// function to retrieve the nominal mgnetic field in kG (0.1T) and convert it directly to T
-/// \param timestamp timestamp corresponding the the collision
-/// \param ccdb CCDB object that contains the configuration for the event
-/// \return magnetic field in Tesla
-
-float getMagneticFieldTesla(const uint64_t& timestamp, const Service<o2::ccdb::BasicCCDBManager>& ccdb)
-{
-  // TODO done only once (and not per run). Will be replaced by CCDBConfigurable
-  static o2::parameters::GRPObject* grpo = ccdb->getForTimeStamp<o2::parameters::GRPObject>("GLO/GRP/GRP", timestamp);
-  if (!grpo) {
-    LOGF(fatal, "GRP object not found for timestamp %llu", timestamp);
-    return 0;
-  } else {
-    LOGF(info, "Retrieved GRP for timestamp %llu with magnetic field of %d kG", timestamp, grpo->getNominalL3Field());
-  }
-
-  return 0.1 * (grpo->getNominalL3Field());
-}
 
 } // namespace o2::analysis::femtoWorld
 
