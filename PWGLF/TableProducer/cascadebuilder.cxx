@@ -88,7 +88,7 @@ struct cascadeBuilder {
   // Configurables
   Configurable<double> d_bz_input{"d_bz", -999, "bz field"};
   Configurable<bool> d_UseAbsDCA{"d_UseAbsDCA", true, "Use Abs DCAs"};
-  Configurable<bool> d_UseWeightedPCA{"d_UseWeightedPCA", true, "Vertices use cov matrices"};
+  Configurable<bool> d_UseWeightedPCA{"d_UseWeightedPCA", false, "Vertices use cov matrices"};
   Configurable<int> useMatCorrType{"useMatCorrType", 0, "0: none, 1: TGeo, 2: LUT"};
 
   // Selections
@@ -206,7 +206,7 @@ struct cascadeBuilder {
       }
       auto v0data = v0.v0Data(); // de-reference index to correct v0data in case it exists
 
-      std::array<float, 3> pVtx = {v0data.collision().posX(), v0data.collision().posY(), v0data.collision().posZ()};
+      std::array<float, 3> pVtx = {casc.collision().posX(), casc.collision().posY(), casc.collision().posZ()};
 
       auto bachTrackCast = casc.bachelor_as<TCascTracksTo>();
       auto posTrackCast = v0data.posTrack_as<TCascTracksTo>();
@@ -373,6 +373,7 @@ struct cascadeBuilder {
         } catch (...) {
           registry.fill(HIST("hCatchedExceptions"), 1.5f);
           LOG(error) << "Exception caught in fitterCasc.process";
+          continue;
         }
 
         if (nCand2 == 0) {
@@ -412,6 +413,16 @@ struct cascadeBuilder {
       if (casc.collisionId() >= 0)
         hCascCandidate->Fill(18.5);
 
+      // Calculate DCAxy of the cascade (with bending)
+      auto lCascadeTrack = fitterCasc.createParentTrackPar();
+      lCascadeTrack.setAbsCharge(charge);            // to be sure
+      lCascadeTrack.setPID(o2::track::PID::XiMinus); // FIXME: not OK for omegas
+      gpu::gpustd::array<float, 2> dcaInfo;
+      dcaInfo[0] = 999;
+      dcaInfo[1] = 999;
+
+      o2::base::Propagator::Instance()->propagateToDCABxByBz({collision.posX(), collision.posY(), collision.posZ()}, lCascadeTrack, 2.f, o2::base::Propagator::MatCorrType::USEMatCorrNONE, &dcaInfo);
+
       cascdata(
         v0.globalIndex(),
         bachTrackCast.globalIndex(),
@@ -423,7 +434,8 @@ struct cascadeBuilder {
         fitterV0.getChi2AtPCACandidate(), fitterCasc.getChi2AtPCACandidate(),
         posTrackCast.dcaXY(),
         negTrackCast.dcaXY(),
-        bachTrackCast.dcaXY());
+        bachTrackCast.dcaXY(),
+        dcaInfo[0]);
     }
   }
 

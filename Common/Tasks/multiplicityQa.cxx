@@ -64,10 +64,14 @@ struct MultiplicityQa {
     histos.add("multiplicityQa/hEventCounter", "Event counter", kTH1D, {axisEvent});
     histos.add("multiplicityQa/hRawFV0", "Raw FV0", kTH1D, {axisMultFV0});
     histos.add("multiplicityQa/hRawFT0", "Raw FT0", kTH1D, {axisMultFT0});
+    histos.add("multiplicityQa/hRawFT0A", "Raw FT0A", kTH1D, {axisMultFT0});
+    histos.add("multiplicityQa/hRawFT0C", "Raw FT0C", kTH1D, {axisMultFT0});
     histos.add("multiplicityQa/hRawFDD", "Raw FDD", kTH1D, {axisMultFDD});
     histos.add("multiplicityQa/hRawNTracksPV", "Raw NTracks", kTH1D, {axisMultNTracks});
     histos.add("multiplicityQa/hZeqFV0", "vtx-z eq FV0", kTH1D, {axisMultFV0});
     histos.add("multiplicityQa/hZeqFT0", "vtx-z eq FT0", kTH1D, {axisMultFT0});
+    histos.add("multiplicityQa/hZeqFT0A", "vtx-z eq FT0A", kTH1D, {axisMultFT0});
+    histos.add("multiplicityQa/hZeqFT0C", "vtx-z eq FT0C", kTH1D, {axisMultFT0});
     histos.add("multiplicityQa/hZeqFDD", "vtx-z eq FDD", kTH1D, {axisMultFDD});
     histos.add("multiplicityQa/hZeqNTracksPV", "vtx-z eq NTracks", kTH1D, {axisMultNTracks});
 
@@ -118,12 +122,16 @@ struct MultiplicityQa {
     //Raw multiplicities
     histos.fill(HIST("multiplicityQa/hRawFV0"), col.multFV0A());
     histos.fill(HIST("multiplicityQa/hRawFT0"), col.multFT0M());
+    histos.fill(HIST("multiplicityQa/hRawFT0A"), col.multFT0A());
+    histos.fill(HIST("multiplicityQa/hRawFT0C"), col.multFT0C());
     histos.fill(HIST("multiplicityQa/hRawFDD"), col.multFDDM());
     histos.fill(HIST("multiplicityQa/hRawNTracksPV"), col.multNTracksPV());
 
     //vertex-Z corrected - FIXME
     histos.fill(HIST("multiplicityQa/hZeqFV0"), col.multZeqFV0A());
     histos.fill(HIST("multiplicityQa/hZeqFT0"), col.multZeqFT0A() + col.multZeqFT0C());
+    histos.fill(HIST("multiplicityQa/hZeqFT0A"), col.multZeqFT0A());
+    histos.fill(HIST("multiplicityQa/hZeqFT0C"), col.multZeqFT0C());
     histos.fill(HIST("multiplicityQa/hZeqFDD"), col.multZeqFDDA() + col.multZeqFDDC());
     histos.fill(HIST("multiplicityQa/hZeqNTracksPV"), col.multZeqNTracksPV());
   }
