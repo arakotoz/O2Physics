@@ -18,6 +18,9 @@
 #ifndef PWGHF_DATAMODEL_CANDIDATERECONSTRUCTIONTABLES_H_
 #define PWGHF_DATAMODEL_CANDIDATERECONSTRUCTIONTABLES_H_
 
+#include <Math/Vector4D.h>
+#include <Math/GenVector/Boost.h>
+
 #include "ALICE3/DataModel/ECAL.h"
 #include "Framework/AnalysisDataModel.h"
 #include "Common/Core/RecoDecay.h"
@@ -41,16 +44,29 @@ DECLARE_SOA_TABLE(HfSelCollision, "AOD", "HFSELCOLLISION", //!
 namespace hf_sel_track
 {
 DECLARE_SOA_COLUMN(IsSelProng, isSelProng, int); //!
-DECLARE_SOA_COLUMN(PxProng, pxProng, float);     //!
-DECLARE_SOA_COLUMN(PyProng, pyProng, float);     //!
-DECLARE_SOA_COLUMN(PzProng, pzProng, float);     //!
 } // namespace hf_sel_track
 
 DECLARE_SOA_TABLE(HfSelTrack, "AOD", "HFSELTRACK", //!
-                  hf_sel_track::IsSelProng,
-                  hf_sel_track::PxProng,
-                  hf_sel_track::PyProng,
-                  hf_sel_track::PzProng);
+                  hf_sel_track::IsSelProng);
+
+namespace hf_track_association
+{
+
+enum TrackTypes { Regular = 0,
+                  Ambiguous,
+                  PVContributor };
+
+DECLARE_SOA_INDEX_COLUMN(Collision, collision);   //! Collision index
+DECLARE_SOA_INDEX_COLUMN(Track, track);           //! Track index
+DECLARE_SOA_COLUMN(TrackType, trackType, int8_t); //! Track type
+} // namespace hf_track_association
+
+DECLARE_SOA_TABLE(HfTrackAssoc, "AOD", "HFTRACKASSOC", //! Table for track-to-collision association for HF vertex finding - tracks can appear for several collisions
+                  hf_track_association::CollisionId,
+                  hf_track_association::TrackId);
+
+DECLARE_SOA_TABLE(HfTrackAssocExtra, "AOD", "HFTRACKASSOCEX", //!
+                  hf_track_association::TrackType);
 
 namespace hf_pv_refit_track
 {
@@ -111,6 +127,7 @@ DECLARE_SOA_COLUMN(FlagXicToPKPi, flagXicToPKPi, uint8_t);       //!
 
 DECLARE_SOA_TABLE(Hf2Prongs, "AOD", "HF2PRONG", //! Table for HF 2 prong candidates
                   o2::soa::Index<>,
+                  hf_track_association::CollisionId,
                   hf_track_index::Prong0Id,
                   hf_track_index::Prong1Id,
                   hf_track_index::HFflag);
@@ -118,12 +135,14 @@ using Hf2Prong = Hf2Prongs::iterator;
 
 DECLARE_SOA_TABLE(HfCascades, "AOD", "HFCASCADE", //! Table for HF candidates with a V0
                   o2::soa::Index<>,
+                  hf_track_association::CollisionId,
                   hf_track_index::Prong0Id,
                   hf_track_index::V0Id);
 using HfCascade = HfCascades::iterator;
 
 DECLARE_SOA_TABLE(Hf3Prongs, "AOD", "HF3PRONG", //! Table for HF 3 prong candidates
                   o2::soa::Index<>,
+                  hf_track_association::CollisionId,
                   hf_track_index::Prong0Id,
                   hf_track_index::Prong1Id,
                   hf_track_index::Prong2Id,
@@ -774,6 +793,68 @@ template <typename T>
 auto invMassDsToPiKK(const T& candidate)
 {
   return candidate.m(array{RecoDecay::getMassPDG(kPiPlus), RecoDecay::getMassPDG(kKPlus), RecoDecay::getMassPDG(kKPlus)});
+}
+
+template <typename T>
+auto deltaMassPhiDsToKKPi(const T& candidate)
+{
+  double invMassKKpair = RecoDecay::m(array{candidate.pVectorProng0(), candidate.pVectorProng1()}, array{RecoDecay::getMassPDG(kKPlus), RecoDecay::getMassPDG(kKPlus)});
+  return std::abs(invMassKKpair - RecoDecay::getMassPDG(pdg::Code::kPhi));
+}
+
+template <typename T>
+auto deltaMassPhiDsToPiKK(const T& candidate)
+{
+  double invMassKKpair = RecoDecay::m(array{candidate.pVectorProng1(), candidate.pVectorProng2()}, array{RecoDecay::getMassPDG(kKPlus), RecoDecay::getMassPDG(kKPlus)});
+  return std::abs(invMassKKpair - RecoDecay::getMassPDG(pdg::Code::kPhi));
+}
+
+/// Calculate the cosine of the angle between the pion and the opposite sign kaon in the phi rest frame
+/// \param candidate Ds candidate from aod::HfCand3Prong table
+/// \param option mass hypothesis considered: 0 = KKPi, 1 = PiKK
+/// \return cosine of pion-kaon angle in the phi rest frame
+template <typename T>
+auto cosPiKPhiRestFrame(const T& candidate, int option)
+{
+  // Ported from AliAODRecoDecayHF3Prong::CosPiKPhiRFrame
+  array<float, 3> momPi;
+  array<float, 3> momK1;
+  array<float, 3> momK2;
+
+  if (option == 0) { // KKPi
+    momPi = candidate.pVectorProng2();
+    momK1 = candidate.pVectorProng1();
+    momK2 = candidate.pVectorProng0();
+  } else { // PiKK
+    momPi = candidate.pVectorProng0();
+    momK1 = candidate.pVectorProng1();
+    momK2 = candidate.pVectorProng2();
+  }
+
+  ROOT::Math::PxPyPzMVector vecPi(momPi[0], momPi[1], momPi[2], RecoDecay::getMassPDG(kPiPlus));
+  ROOT::Math::PxPyPzMVector vecK1(momK1[0], momK1[1], momK1[2], RecoDecay::getMassPDG(kKPlus));
+  auto momPhi = RecoDecay::pVec(momK1, momK2);
+  ROOT::Math::PxPyPzMVector vecPhi(momPhi[0], momPhi[1], momPhi[2], RecoDecay::getMassPDG(pdg::Code::kPhi));
+
+  ROOT::Math::Boost boostToPhiRestFrame(vecPhi.BoostToCM());
+  auto momPiPhiRestFrame = boostToPhiRestFrame(vecPi).Vect();
+  auto momK1PhiRestFrame = boostToPhiRestFrame(vecK1).Vect();
+
+  return momPiPhiRestFrame.Dot(momK1PhiRestFrame) / std::sqrt(momPiPhiRestFrame.Mag2() * momK1PhiRestFrame.Mag2());
+}
+
+template <typename T>
+auto cos3PiKDsToKKPi(const T& candidate)
+{
+  auto cosPiK = cosPiKPhiRestFrame(candidate, 0);
+  return cosPiK * cosPiK * cosPiK;
+}
+
+template <typename T>
+auto cos3PiKDsToPiKK(const T& candidate)
+{
+  auto cosPiK = cosPiKPhiRestFrame(candidate, 1);
+  return cosPiK * cosPiK * cosPiK;
 }
 
 // Λc± → p± K∓ π±
