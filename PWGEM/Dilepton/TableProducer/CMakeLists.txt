@@ -9,12 +9,9 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-o2physics_add_dpl_workflow(tof-skimscreation
-  SOURCES tofSkimsTableCreator.cxx
-  PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore
-  COMPONENT_NAME Analysis)
 
-o2physics_add_dpl_workflow(tof-calib
-  SOURCES tofOfflineCalib.cxx
-  PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore
-  COMPONENT_NAME Analysis)
+o2physics_add_dpl_workflow(tree-creator-electron-ml
+                    SOURCES treeCreatorElectronML.cxx
+                    PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2::DetectorsBase O2Physics::AnalysisCore
+                    COMPONENT_NAME Analysis)
+
