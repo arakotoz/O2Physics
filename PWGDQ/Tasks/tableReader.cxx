@@ -411,6 +411,7 @@ struct AnalysisMuonSelection {
 };
 
 struct AnalysisPrefilterSelection {
+  SliceCache cache;
   Produces<aod::Prefilter> prefilter;
   Preslice<MyBarrelTracks> perCollision = aod::reducedtrack::reducedeventId;
 
@@ -465,7 +466,7 @@ struct AnalysisPrefilterSelection {
     for (auto& event : events) {
       if (event.isEventSelected()) {
         auto groupedPrefilterCandidates = filteredTracks.sliceBy(perCollision, event.globalIndex());
-        auto groupedBarrelCandidates = barrelTracksSelected->sliceByCached(aod::reducedtrack::reducedeventId, event.globalIndex());
+        auto groupedBarrelCandidates = barrelTracksSelected->sliceByCached(aod::reducedtrack::reducedeventId, event.globalIndex(), cache);
         runPrefilterPairing<pairType, gkTrackFillMap>(groupedPrefilterCandidates, groupedBarrelCandidates);
       }
     } // end loop events
@@ -979,7 +980,7 @@ struct AnalysisSameEventPairing {
       }
 
       int iCut = 0;
-      for (unsigned int icut = 0; icut < ncuts; icut++) {
+      for (int icut = 0; icut < ncuts; icut++) {
         if (twoTrackFilter & (uint32_t(1) << icut)) {
           if (t1.sign() * t2.sign() < 0) {
             fHistMan->FillHistClass(histNames[iCut][0].Data(), VarManager::fgValues);
