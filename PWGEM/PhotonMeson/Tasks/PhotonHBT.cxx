@@ -107,7 +107,7 @@ struct PhotonHBT {
         std::string pair_cut_name = cutname1 + "_" + cutname2;
         o2::aod::emphotonhistograms::AddHistClass(list_pair_subsys, pair_cut_name.data());
         THashList* list_pair_subsys_cut = reinterpret_cast<THashList*>(list_pair_subsys->FindObject(pair_cut_name.data()));
-        o2::aod::emphotonhistograms::DefineHistograms(list_pair_subsys_cut, "gammagamma_hbt");
+        o2::aod::emphotonhistograms::DefineHistograms(list_pair_subsys_cut, "photon_hbt");
       } // end of cut2 loop
     }   // end of cut1 loop
   }
@@ -199,6 +199,11 @@ struct PhotonHBT {
   void SameEventPairing(TEvents const& collisions, TPhotons1 const& photons1, TPhotons2 const& photons2, TPreslice1 const& perCollision1, TPreslice2 const& perCollision2, TCuts1 const& cuts1, TCuts2 const& cuts2, TLegs const& legs)
   {
     for (auto& collision : collisions) {
+
+      if ((pairtype == kPHOSPHOS || pairtype == kPCMPHOS) && !collision.isPHOSCPVreadout()) {
+        continue;
+      }
+
       reinterpret_cast<TH1F*>(fMainList->FindObject("Event")->FindObject(pairnames[pairtype].data())->FindObject("hZvtx_before"))->Fill(collision.posZ());
       reinterpret_cast<TH1F*>(fMainList->FindObject("Event")->FindObject(pairnames[pairtype].data())->FindObject("hCollisionCounter"))->Fill(1.0); // all
       if (!collision.sel8()) {
@@ -240,10 +245,8 @@ struct PhotonHBT {
             float qout = q_3d.Dot(uv_out);
             float qlong = q_3d.Dot(uv_long);
             float qside = q_3d.Dot(uv_side);
-            reinterpret_cast<TH2F*>(fMainList->FindObject("Pair")->FindObject(pairnames[pairtype].data())->FindObject(Form("%s_%s", cut.GetName(), cut.GetName()))->FindObject("hQinvKt_Same"))->Fill(qinv, kt);
-            reinterpret_cast<TH2F*>(fMainList->FindObject("Pair")->FindObject(pairnames[pairtype].data())->FindObject(Form("%s_%s", cut.GetName(), cut.GetName()))->FindObject("hQlongKt_Same"))->Fill(qlong, kt);
-            reinterpret_cast<TH2F*>(fMainList->FindObject("Pair")->FindObject(pairnames[pairtype].data())->FindObject(Form("%s_%s", cut.GetName(), cut.GetName()))->FindObject("hQoutKt_Same"))->Fill(qout, kt);
-            reinterpret_cast<TH2F*>(fMainList->FindObject("Pair")->FindObject(pairnames[pairtype].data())->FindObject(Form("%s_%s", cut.GetName(), cut.GetName()))->FindObject("hQsideKt_Same"))->Fill(qside, kt);
+            double values[5] = {qinv, qlong, qout, qside, kt};
+            reinterpret_cast<THnSparseF*>(fMainList->FindObject("Pair")->FindObject(pairnames[pairtype].data())->FindObject(Form("%s_%s", cut.GetName(), cut.GetName()))->FindObject("hs_q_same"))->Fill(values);
           }    // end of combination
         }      // end of cut loop
       } else { // different subsystem pairs
@@ -266,10 +269,8 @@ struct PhotonHBT {
               float qout = q_3d.Dot(uv_out);
               float qlong = q_3d.Dot(uv_long);
               float qside = q_3d.Dot(uv_side);
-              reinterpret_cast<TH2F*>(fMainList->FindObject("Pair")->FindObject(pairnames[pairtype].data())->FindObject(Form("%s_%s", cut1.GetName(), cut2.GetName()))->FindObject("hQinvKt_Same"))->Fill(qinv, kt);
-              reinterpret_cast<TH2F*>(fMainList->FindObject("Pair")->FindObject(pairnames[pairtype].data())->FindObject(Form("%s_%s", cut1.GetName(), cut2.GetName()))->FindObject("hQlongKt_Same"))->Fill(qlong, kt);
-              reinterpret_cast<TH2F*>(fMainList->FindObject("Pair")->FindObject(pairnames[pairtype].data())->FindObject(Form("%s_%s", cut1.GetName(), cut2.GetName()))->FindObject("hQoutKt_Same"))->Fill(qout, kt);
-              reinterpret_cast<TH2F*>(fMainList->FindObject("Pair")->FindObject(pairnames[pairtype].data())->FindObject(Form("%s_%s", cut1.GetName(), cut2.GetName()))->FindObject("hQsideKt_Same"))->Fill(qside, kt);
+              double values[5] = {qinv, qlong, qout, qside, kt};
+              reinterpret_cast<THnSparseF*>(fMainList->FindObject("Pair")->FindObject(pairnames[pairtype].data())->FindObject(Form("%s_%s", cut1.GetName(), cut2.GetName()))->FindObject("hs_q_same"))->Fill(values);
             } // end of combination
           }   // end of cut2 loop
         }     // end of cut1 loop
@@ -279,8 +280,9 @@ struct PhotonHBT {
 
   Configurable<int> ndepth{"ndepth", 10, "depth for event mixing"};
   ConfigurableAxis ConfVtxBins{"ConfVtxBins", {VARIABLE_WIDTH, -10.0f, -8.f, -6.f, -4.f, -2.f, 0.f, 2.f, 4.f, 6.f, 8.f, 10.f}, "Mixing bins - z-vertex"};
-  using BinningType = ColumnBinningPolicy<aod::collision::PosZ>;
-  BinningType colBinning{{ConfVtxBins}, true};
+  ConfigurableAxis ConfMultBins{"ConfMultBins", {VARIABLE_WIDTH, 0.0f, 10.f, 20.0f, 40.0f, 60.0f, 80.0f, 100.0f, 200.0f, 1e+10f}, "Mixing bins - multiplicity"};
+  using BinningType = ColumnBinningPolicy<aod::collision::PosZ, aod::mult::MultNTracksPV>;
+  BinningType colBinning{{ConfVtxBins, ConfMultBins}, true};
 
   template <PairType pairtype, typename TEvents, typename TPhotons1, typename TPhotons2, typename TPreslice1, typename TPreslice2, typename TCuts1, typename TCuts2, typename TLegs>
   void MixedEventPairing(TEvents const& collisions, TPhotons1 const& photons1, TPhotons2 const& photons2, TPreslice1 const& perCollision1, TPreslice2 const& perCollision2, TCuts1 const& cuts1, TCuts2 const& cuts2, TLegs const& legs)
@@ -290,13 +292,13 @@ struct PhotonHBT {
     int index_coll1 = -999;
     for (auto& [collision1, collision2] : soa::selfCombinations(colBinning, 1e+3, -1, collisions, collisions)) { // internally, CombinationsStrictlyUpperIndexPolicy(collisions, collisions) is called.
 
-      if (nev > ndepth) {
-        continue;
-      }
-
       if (index_coll1 != collision1.collisionId()) {
         index_coll1 = collision1.collisionId();
         nev = 0; // reset event counter for mixing, when collision index of collision1 changes.
+      }
+
+      if (nev > ndepth) {
+        continue;
       }
 
       if (pairtype == PairType::kPCMPCM && (collision1.ngpcm() < 2 || collision2.ngpcm() < 2)) {
@@ -339,11 +341,9 @@ struct PhotonHBT {
             float qout = q_3d.Dot(uv_out);
             float qlong = q_3d.Dot(uv_long);
             float qside = q_3d.Dot(uv_side);
+            double values[5] = {qinv, qlong, qout, qside, kt};
+            reinterpret_cast<THnSparseF*>(fMainList->FindObject("Pair")->FindObject(pairnames[pairtype].data())->FindObject(Form("%s_%s", cut1.GetName(), cut2.GetName()))->FindObject("hs_q_mix"))->Fill(values);
 
-            reinterpret_cast<TH2F*>(fMainList->FindObject("Pair")->FindObject(pairnames[pairtype].data())->FindObject(Form("%s_%s", cut1.GetName(), cut2.GetName()))->FindObject("hQinvKt_Mixed"))->Fill(qinv, kt);
-            reinterpret_cast<TH2F*>(fMainList->FindObject("Pair")->FindObject(pairnames[pairtype].data())->FindObject(Form("%s_%s", cut1.GetName(), cut2.GetName()))->FindObject("hQlongKt_Mixed"))->Fill(qlong, kt);
-            reinterpret_cast<TH2F*>(fMainList->FindObject("Pair")->FindObject(pairnames[pairtype].data())->FindObject(Form("%s_%s", cut1.GetName(), cut2.GetName()))->FindObject("hQoutKt_Mixed"))->Fill(qout, kt);
-            reinterpret_cast<TH2F*>(fMainList->FindObject("Pair")->FindObject(pairnames[pairtype].data())->FindObject(Form("%s_%s", cut1.GetName(), cut2.GetName()))->FindObject("hQsideKt_Mixed"))->Fill(qside, kt);
           } // end of different photon combinations
         }   // end of cut2 loop
       }     // end of cut1 loop
