@@ -50,7 +50,7 @@ struct HfFilter { // Main struct for HF triggers
   Produces<aod::HFOptimisationTreeFemto> optimisationTreeFemto;
   Produces<aod::HFOptimisationTreeCollisions> optimisationTreeCollisions;
 
-  Configurable<int> activateQA{"activateQA", 0, "flag to enable QA histos (0 no QA, 1 basic QA, 2 extended QA)"};
+  Configurable<int> activateQA{"activateQA", 0, "flag to enable QA histos (0 no QA, 1 basic QA, 2 extended QA, 3 very extended QA)"};
 
   // parameters for all triggers
   Configurable<float> nsigmaTPCProtonLc{"nsigmaTPCProtonLc", 3., "Maximum value for TPC PID proton Nsigma for Lc candidates"};
@@ -112,7 +112,7 @@ struct HfFilter { // Main struct for HF triggers
   Service<o2::ccdb::BasicCCDBManager> ccdb;
   Configurable<std::string> url{"ccdb-url", "http://alice-ccdb.cern.ch", "url of the ccdb repository"};
   Configurable<std::string> mlModelPathCCDB{"mlModelPathCCDB", "Analysis/PWGHF/ML/HFTrigger/", "Path on CCDB"};
-  Configurable<long> timestampCCDB{"timestampCCDB", -1, "timestamp of the ONNX file for ML model used to query in CCDB. Exceptions: > 0 for the specific timestamp, 0 gets the run dependent timestamp"};
+  Configurable<int64_t> timestampCCDB{"timestampCCDB", -1, "timestamp of the ONNX file for ML model used to query in CCDB. Exceptions: > 0 for the specific timestamp, 0 gets the run dependent timestamp"};
   Configurable<bool> loadModelsFromCCDB{"loadModelsFromCCDB", false, "Flag to enable or disable the loading of models from CCDB"};
   Configurable<std::string> ccdbPathGrpMag{"ccdbPathGrpMag", "GLO/Config/GRPMagField", "CCDB path of the GRPMagField object"};
   Configurable<string> ccdbPathTPC{"ccdbPathTPC", "Users/i/iarsene/Calib/TPCpostCalib", "base path to the ccdb object"};
@@ -143,6 +143,7 @@ struct HfFilter { // Main struct for HF triggers
   std::array<std::shared_ptr<TH1>, kNCharmParticles> hCharmProtonKstarDistr{};
   std::array<std::shared_ptr<TH2>, kNBeautyParticles> hMassVsPtB{};
   std::array<std::shared_ptr<TH2>, kNCharmParticles + 3> hMassVsPtC{}; // +3 for resonances (D*+, D*0, Ds*+)
+  std::array<std::shared_ptr<TH2>, kNCharmParticles> hMassVsPhiC{};
   std::shared_ptr<TH2> hProtonTPCPID, hProtonTOFPID;
   std::array<std::shared_ptr<TH1>, kNCharmParticles> hBDTScoreBkg{};
   std::array<std::shared_ptr<TH1>, kNCharmParticles> hBDTScorePrompt{};
@@ -192,6 +193,9 @@ struct HfFilter { // Main struct for HF triggers
           hBDTScoreBkg[iCharmPart] = registry.add<TH1>(Form("f%sBDTScoreBkgDistr", charmParticleNames[iCharmPart].data()), Form("BDT background score distribution for %s;BDT background score;counts", charmParticleNames[iCharmPart].data()), HistType::kTH1F, {bdtAxis});
           hBDTScorePrompt[iCharmPart] = registry.add<TH1>(Form("f%sBDTScorePromptDistr", charmParticleNames[iCharmPart].data()), Form("BDT prompt score distribution for %s;BDT prompt score;counts", charmParticleNames[iCharmPart].data()), HistType::kTH1F, {bdtAxis});
           hBDTScoreNonPrompt[iCharmPart] = registry.add<TH1>(Form("f%sBDTScoreNonPromptDistr", charmParticleNames[iCharmPart].data()), Form("BDT nonprompt score distribution for %s;BDT nonprompt score;counts", charmParticleNames[iCharmPart].data()), HistType::kTH1F, {bdtAxis});
+        }
+        if (activateQA > 2) {
+          hMassVsPhiC[iCharmPart] = registry.add<TH2>(Form("fMassVsPhi%s", charmParticleNames[iCharmPart].data()), Form("#it{M} vs. #varphi distribution of triggered %s candidates;#varphi;#it{M} (GeV/#it{c}^{2});counts", charmParticleNames[iCharmPart].data()), HistType::kTH2F, {phiAxis, massAxisC[iCharmPart]});
         }
       }
       hMassVsPtC[kNCharmParticles] = registry.add<TH2>("fMassVsPtDStarPlus", "#it{M} vs. #it{p}_{T} distribution of triggered DStarPlus candidates;#it{p}_{T} (GeV/#it{c});#it{M} (GeV/#it{c}^{2});counts", HistType::kTH2F, {ptAxis, massAxisC[kNCharmParticles]});
@@ -292,10 +296,10 @@ struct HfFilter { // Main struct for HF triggers
             LOG(fatal) << "Can not find the TPC Post Calibration object!";
           }
 
-          hMapPion[0] = (TH3F*)calibList->FindObject("mean_map_pion");
-          hMapPion[1] = (TH3F*)calibList->FindObject("sigma_map_pion");
-          hMapProton[0] = (TH3F*)calibList->FindObject("mean_map_proton");
-          hMapProton[1] = (TH3F*)calibList->FindObject("sigma_map_proton");
+          hMapPion[0] = reinterpret_cast<TH3F*>(calibList->FindObject("mean_map_pion"));
+          hMapPion[1] = reinterpret_cast<TH3F*>(calibList->FindObject("sigma_map_pion"));
+          hMapProton[0] = reinterpret_cast<TH3F*>(calibList->FindObject("mean_map_proton"));
+          hMapProton[1] = reinterpret_cast<TH3F*>(calibList->FindObject("sigma_map_proton"));
 
           if (!hMapPion[0] || !hMapPion[1] || !hMapProton[0] || !hMapProton[1]) {
             LOG(fatal) << "Can not find histograms!";
@@ -319,7 +323,7 @@ struct HfFilter { // Main struct for HF triggers
       bool keepEvent[kNtriggersHF]{false};
       //
 
-      std::vector<std::vector<long>> indicesDau2Prong{};
+      std::vector<std::vector<int64_t>> indicesDau2Prong{};
 
       auto cand2ProngsThisColl = cand2Prongs.sliceBy(hf2ProngPerCollision, thisCollId);
       for (const auto& cand2Prong : cand2ProngsThisColl) {                                // start loop over 2 prongs
@@ -395,12 +399,13 @@ struct HfFilter { // Main struct for HF triggers
 
         auto pVec2Prong = RecoDecay::pVec(pVecPos, pVecNeg);
         auto pt2Prong = RecoDecay::pt(pVec2Prong);
+        auto phi2Prong = RecoDecay::phi(pVec2Prong);
 
         if (applyOptimisation) {
           optimisationTreeCharm(thisCollId, pdg::Code::kD0, pt2Prong, scoresToFill[0], scoresToFill[1], scoresToFill[2]);
         }
 
-        auto selD0 = isSelectedD0InMassRange(pVecPos, pVecNeg, pt2Prong, preselD0, deltaMassCharmHadronForBeauty, activateQA, hMassVsPtC[kD0]);
+        auto selD0 = isSelectedD0InMassRange(pVecPos, pVecNeg, pt2Prong, phi2Prong, preselD0, deltaMassCharmHadronForBeauty, activateQA, hMassVsPtC[kD0], hMassVsPhiC[kD0]);
 
         if (pt2Prong >= pTThreshold2Prong) {
           keepEvent[kHighPt2P] = true;
@@ -410,7 +415,7 @@ struct HfFilter { // Main struct for HF triggers
         } // end high-pT selection
 
         if (isCharmTagged) {
-          indicesDau2Prong.push_back(std::vector<long>{trackPos.globalIndex(), trackNeg.globalIndex()});
+          indicesDau2Prong.push_back(std::vector<int64_t>{trackPos.globalIndex(), trackNeg.globalIndex()});
         } // end multi-charm selection
 
         auto trackIdsThisCollision = trackIndices.sliceBy(trackIndicesPerCollision, thisCollId);
@@ -524,7 +529,7 @@ struct HfFilter { // Main struct for HF triggers
 
       } // end loop over 2-prong candidates
 
-      std::vector<std::vector<long>> indicesDau3Prong{};
+      std::vector<std::vector<int64_t>> indicesDau3Prong{};
       auto cand3ProngsThisColl = cand3Prongs.sliceBy(hf3ProngPerCollision, thisCollId);
       for (const auto& cand3Prong : cand3ProngsThisColl) { // start loop over 3 prongs
         std::array<int8_t, kNCharmParticles - 1> is3Prong = {
@@ -631,34 +636,35 @@ struct HfFilter { // Main struct for HF triggers
         }
 
         if (std::accumulate(isCharmTagged.begin(), isCharmTagged.end(), 0)) {
-          indicesDau3Prong.push_back(std::vector<long>{trackFirst.globalIndex(), trackSecond.globalIndex(), trackThird.globalIndex()});
+          indicesDau3Prong.push_back(std::vector<int64_t>{trackFirst.globalIndex(), trackSecond.globalIndex(), trackThird.globalIndex()});
         } // end multiple 3-prong selection
 
         auto pVec3Prong = RecoDecay::pVec(pVecFirst, pVecSecond, pVecThird);
         auto pt3Prong = RecoDecay::pt(pVec3Prong);
-        float sign3Prong = trackFirst.sign() * trackSecond.sign() * trackThird.sign();
+        auto phi3Prong = RecoDecay::phi(pVec3Prong);
+        float sign3Prong = -1 * trackFirst.sign() * trackSecond.sign() * trackThird.sign();
 
         std::array<int8_t, kNCharmParticles - 1> is3ProngInMass{0};
         if (is3Prong[0]) {
-          is3ProngInMass[0] = isSelectedDplusInMassRange(pVecFirst, pVecThird, pVecSecond, pt3Prong, deltaMassCharmHadronForBeauty, activateQA, hMassVsPtC[kDplus]);
+          is3ProngInMass[0] = isSelectedDplusInMassRange(pVecFirst, pVecThird, pVecSecond, pt3Prong, phi3Prong, deltaMassCharmHadronForBeauty, activateQA, hMassVsPtC[kDplus], hMassVsPhiC[kDplus]);
           if (applyOptimisation) {
             optimisationTreeCharm(thisCollId, pdg::Code::kDPlus, pt3Prong, scoresToFill[0][0], scoresToFill[0][1], scoresToFill[0][2]);
           }
         }
         if (is3Prong[1]) {
-          is3ProngInMass[1] = isSelectedDsInMassRange(pVecFirst, pVecThird, pVecSecond, pt3Prong, is3Prong[1], deltaMassCharmHadronForBeauty, activateQA, hMassVsPtC[kDs]);
+          is3ProngInMass[1] = isSelectedDsInMassRange(pVecFirst, pVecThird, pVecSecond, pt3Prong, phi3Prong, is3Prong[1], deltaMassCharmHadronForBeauty, activateQA, hMassVsPtC[kDs], hMassVsPhiC[kDs]);
           if (applyOptimisation) {
             optimisationTreeCharm(thisCollId, pdg::Code::kDS, pt3Prong, scoresToFill[1][0], scoresToFill[1][1], scoresToFill[1][2]);
           }
         }
         if (is3Prong[2]) {
-          is3ProngInMass[2] = isSelectedLcInMassRange(pVecFirst, pVecThird, pVecSecond, pt3Prong, is3Prong[2], deltaMassCharmHadronForBeauty, activateQA, hMassVsPtC[kLc]);
+          is3ProngInMass[2] = isSelectedLcInMassRange(pVecFirst, pVecThird, pVecSecond, pt3Prong, phi3Prong, is3Prong[2], deltaMassCharmHadronForBeauty, activateQA, hMassVsPtC[kLc], hMassVsPhiC[kLc]);
           if (applyOptimisation) {
             optimisationTreeCharm(thisCollId, pdg::Code::kLambdaCPlus, pt3Prong, scoresToFill[2][0], scoresToFill[2][1], scoresToFill[2][2]);
           }
         }
         if (is3Prong[3]) {
-          is3ProngInMass[3] = isSelectedXicInMassRange(pVecFirst, pVecThird, pVecSecond, pt3Prong, is3Prong[3], deltaMassCharmHadronForBeauty, activateQA, hMassVsPtC[kXic]);
+          is3ProngInMass[3] = isSelectedXicInMassRange(pVecFirst, pVecThird, pVecSecond, pt3Prong, phi3Prong, is3Prong[3], deltaMassCharmHadronForBeauty, activateQA, hMassVsPtC[kXic], hMassVsPhiC[kXic]);
           if (applyOptimisation) {
             optimisationTreeCharm(thisCollId, pdg::Code::kXiCPlus, pt3Prong, scoresToFill[3][0], scoresToFill[3][1], scoresToFill[3][2]);
           }
@@ -696,7 +702,7 @@ struct HfFilter { // Main struct for HF triggers
           float massCharmHypos[kNBeautyParticles - 2] = {massDPlus, massDs, massLc, massXic};
           float massBeautyHypos[kNBeautyParticles - 2] = {massB0, massBs, massLb, massXib};
           float deltaMassHypos[kNBeautyParticles - 2] = {deltaMassB0, deltaMassBs, deltaMassLb, deltaMassXib};
-          if (track.sign() * sign3Prong < 0 && isSelectedTrackForBeauty(trackParFourth, dcaFourth, pTMinSoftPion, pTMinBeautyBachelor, pTBinsTrack, cutsSingleTrackBeauty[kBeauty4P - 2]) == kRegular) {
+          if (track.sign() * sign3Prong < 0 && isSelectedTrackForBeauty(trackParFourth, dcaFourth, pTMinBeautyBachelor, pTMinBeautyBachelor, pTBinsTrack, cutsSingleTrackBeauty[kBeauty4P - 2]) == kRegular) {
             for (int iHypo{0}; iHypo < kNBeautyParticles - 2 && !keepEvent[kBeauty4P]; ++iHypo) {
               if (isBeautyTagged[iHypo] && (TESTBIT(is3ProngInMass[iHypo], 0) || TESTBIT(is3ProngInMass[iHypo], 1))) {
                 auto massCandB = RecoDecay::m(std::array{pVec3Prong, pVecFourth}, std::array{massCharmHypos[iHypo], massPi});

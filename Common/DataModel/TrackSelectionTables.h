@@ -51,7 +51,8 @@ struct TrackSelectionFlags {
   static constexpr flagtype kDCAz = 1 << 14;
   // Combo masks
   static constexpr flagtype kQualityTracks = kTrackType | kTPCNCls | kTPCCrossedRows | kTPCCrossedRowsOverNCls | kTPCChi2NDF | kTPCRefit | kITSNCls | kITSChi2NDF | kITSRefit | kITSHits;
-  static constexpr flagtype kQualityTracksWoTPCCluster = kTrackType | kTPCChi2NDF | kTPCRefit | kITSNCls | kITSChi2NDF | kITSRefit | kITSHits;
+  static constexpr flagtype kQualityTracksITS = kTrackType | kITSNCls | kITSChi2NDF | kITSRefit | kITSHits;
+  static constexpr flagtype kQualityTracksWoTPCCluster = kQualityTracksITS | kTPCChi2NDF | kTPCRefit;
   static constexpr flagtype kPrimaryTracks = kGoldenChi2 | kDCAxy | kDCAz;
   static constexpr flagtype kInAcceptanceTracks = kPtRange | kEtaRange;
   static constexpr flagtype kGlobalTrack = kQualityTracks | kPrimaryTracks | kInAcceptanceTracks;
@@ -73,6 +74,7 @@ struct TrackSelectionFlags {
 
 #define requireTrackCutInFilter(mask) ((aod::track::trackCutFlag & aod::track::mask) == aod::track::mask)
 #define requireQualityTracksInFilter() requireTrackCutInFilter(TrackSelectionFlags::kQualityTracks)
+#define requireQualityTracksITSInFilter() requireTrackCutInFilter(TrackSelectionFlags::kQualityTracksITS)
 #define requirePrimaryTracksInFilter() requireTrackCutInFilter(TrackSelectionFlags::kPrimaryTracks)
 #define requireInAcceptanceTracksInFilter() requireTrackCutInFilter(TrackSelectionFlags::kInAcceptanceTracks)
 #define requireGlobalTrackInFilter() requireTrackCutInFilter(TrackSelectionFlags::kGlobalTrack)
@@ -89,6 +91,7 @@ DECLARE_SOA_COLUMN(TrackCutFlagFb1, trackCutFlagFb1, bool);                    /
 DECLARE_SOA_COLUMN(TrackCutFlagFb2, trackCutFlagFb2, bool);                    //! Flag with the single cut passed flagged for the second selection criteria (as general but 2 point2 in ITS IB)
 DECLARE_SOA_COLUMN(TrackCutFlagFb3, trackCutFlagFb3, bool);                    //! Flag with the single cut passed flagged for the third selection criteria (HF-like: global w/o tight DCA selection)
 DECLARE_SOA_COLUMN(TrackCutFlagFb4, trackCutFlagFb4, bool);                    //! Flag with the single cut passed flagged for the fourth selection criteria (nuclei)
+DECLARE_SOA_COLUMN(TrackCutFlagFb5, trackCutFlagFb5, bool);                    //! Flag with the single cut passed flagged for the fith selection criteria (jet validation - reduced set of cuts)
 
 #define DECLARE_DYN_TRKSEL_COLUMN(name, getter, mask) \
   DECLARE_SOA_DYNAMIC_COLUMN(name, getter, [](TrackSelectionFlags::flagtype flags) -> bool { return TrackSelectionFlags::checkFlag(flags, mask); });
@@ -99,6 +102,7 @@ DECLARE_SOA_DYNAMIC_COLUMN(CheckFlag, checkFlag,
                               TrackSelectionFlags::flagtype mask) -> bool { return TrackSelectionFlags::checkFlag(flags, mask); }); //! Checks the single cut
 // Combo selections
 DECLARE_DYN_TRKSEL_COLUMN(IsQualityTrack, isQualityTrack, TrackSelectionFlags::kQualityTracks);                                          //! Passed the combined track cut: kQualityTracks
+DECLARE_DYN_TRKSEL_COLUMN(IsQualityTrackITS, isQualityTrackITS, TrackSelectionFlags::kQualityTracksITS);                                 //! Passed the combined track cut: kQualityTracksITS
 DECLARE_DYN_TRKSEL_COLUMN(IsPrimaryTrack, isPrimaryTrack, TrackSelectionFlags::kPrimaryTracks);                                          //! Passed the combined track cut: kPrimaryTracks
 DECLARE_DYN_TRKSEL_COLUMN(IsInAcceptanceTrack, isInAcceptanceTrack, TrackSelectionFlags::kInAcceptanceTracks);                           //! Passed the combined track cut: kInAcceptanceTracks
 DECLARE_DYN_TRKSEL_COLUMN(IsGlobalTrack, isGlobalTrack, TrackSelectionFlags::kGlobalTrack);                                              //! Passed the combined track cut: kGlobalTrack
@@ -148,7 +152,9 @@ DECLARE_SOA_TABLE(TrackSelection, "AOD", "TRACKSELECTION", //! Information on th
                   track::TrackCutFlagFb2,
                   track::TrackCutFlagFb3,
                   track::TrackCutFlagFb4,
+                  track::TrackCutFlagFb5,
                   track::IsQualityTrack<track::TrackCutFlag>,
+                  track::IsQualityTrackITS<track::TrackCutFlag>,
                   track::IsPrimaryTrack<track::TrackCutFlag>,
                   track::IsInAcceptanceTrack<track::TrackCutFlag>,
                   track::IsGlobalTrack<track::TrackCutFlag>,

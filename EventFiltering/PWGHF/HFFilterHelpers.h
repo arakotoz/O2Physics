@@ -18,8 +18,8 @@
 /// \author Alexandre Bigot <alexandre.bigot@cern.ch>, Strasbourg University
 /// \author Biao Zhang <biao.zhang@cern.ch>, CCNU
 
-#ifndef O2_ANALYSIS_HF_FILTER_HELPERS_H_
-#define O2_ANALYSIS_HF_FILTER_HELPERS_H_
+#ifndef EVENTFILTERING_PWGHF_HFFILTERHELPERS_H_
+#define EVENTFILTERING_PWGHF_HFFILTERHELPERS_H_
 
 #include "Framework/DataTypes.h"
 #include "Framework/AnalysisDataModel.h"
@@ -37,6 +37,9 @@
 #include <array>
 #include <string>
 #include <cmath>
+#include <map>
+#include <memory>
+#include <algorithm>
 
 #include "Math/Vector3D.h"
 #include "Math/Vector4D.h"
@@ -48,6 +51,7 @@
 using namespace o2;
 using namespace o2::framework;
 using namespace o2::framework::expressions;
+using namespace o2::constants::math;
 
 namespace o2::aod
 {
@@ -139,6 +143,7 @@ static const AxisSpec nSigmaAxis{100, -10.f, 10.f};
 static const AxisSpec alphaAxis{100, -1.f, 1.f};
 static const AxisSpec qtAxis{100, 0.f, 0.25f};
 static const AxisSpec bdtAxis{100, 0.f, 1.f};
+static const AxisSpec phiAxis{36, 0., TwoPI};
 static const std::array<AxisSpec, kNCharmParticles + 3> massAxisC = {AxisSpec{100, 1.65f, 2.05f}, AxisSpec{100, 1.65f, 2.05f}, AxisSpec{100, 1.75f, 2.15f}, AxisSpec{100, 2.05f, 2.45f}, AxisSpec{100, 2.25f, 2.65f}, AxisSpec{100, 1.98f, 2.08f}, AxisSpec{100, 1.98f, 2.08f}, AxisSpec{100, 2.08f, 2.18f}};
 static const std::array<AxisSpec, kNBeautyParticles> massAxisB = {AxisSpec{100, 5.0f, 5.6f}, AxisSpec{100, 5.0f, 5.6f}, AxisSpec{100, 5.0f, 5.6f}, AxisSpec{100, 5.0f, 5.6f}, AxisSpec{100, 5.3f, 5.9f}, AxisSpec{100, 5.3f, 5.9f}};
 
@@ -487,13 +492,16 @@ int8_t isDzeroPreselected(const T& trackPos, const T& trackNeg, const float& nsi
 /// \param hMassVsPt histo with invariant mass vs pt
 /// \return 1 for D0, 2 for D0bar, 3 for both
 template <typename T, typename H2>
-int8_t isSelectedD0InMassRange(const T& pTrackPos, const T& pTrackNeg, const float& ptD, int8_t isSelected, const float& deltaMassCharmHadronForBeauty, const int& activateQA, H2 hMassVsPt)
+int8_t isSelectedD0InMassRange(const T& pTrackPos, const T& pTrackNeg, const float& ptD, const float& phiD, int8_t isSelected, const float& deltaMassCharmHadronForBeauty, const int& activateQA, H2 hMassVsPt, H2 hMassVsPhi)
 {
   int8_t retValue = 0;
   if (TESTBIT(isSelected, 0)) {
     auto invMassD0 = RecoDecay::m(std::array{pTrackPos, pTrackNeg}, std::array{massPi, massK});
     if (activateQA) {
       hMassVsPt->Fill(ptD, invMassD0);
+      if (activateQA > 2) {
+        hMassVsPhi->Fill(phiD, invMassD0);
+      }
     }
     if (std::abs(invMassD0 - massD0) < deltaMassCharmHadronForBeauty || ptD > 10) {
       retValue |= BIT(0);
@@ -503,6 +511,9 @@ int8_t isSelectedD0InMassRange(const T& pTrackPos, const T& pTrackNeg, const flo
     auto invMassD0bar = RecoDecay::m(std::array{pTrackPos, pTrackNeg}, std::array{massK, massPi});
     if (activateQA) {
       hMassVsPt->Fill(ptD, invMassD0bar);
+      if (activateQA > 2) {
+        hMassVsPhi->Fill(phiD, invMassD0bar);
+      }
     }
     if (std::abs(invMassD0bar - massD0) < deltaMassCharmHadronForBeauty || ptD > 10) {
       retValue |= BIT(1);
@@ -522,14 +533,17 @@ int8_t isSelectedD0InMassRange(const T& pTrackPos, const T& pTrackNeg, const flo
 /// \param hMassVsPt histo with invariant mass vs pt
 /// \return BIT(0) (==1) for D+, 0 otherwise
 template <typename T, typename H2>
-int8_t isSelectedDplusInMassRange(const T& pTrackSameChargeFirst, const T& pTrackSameChargeSecond, const T& pTrackOppositeCharge, const float& ptD, const float& deltaMassCharmHadronForBeauty, const int& activateQA, H2 hMassVsPt)
+int8_t isSelectedDplusInMassRange(const T& pTrackSameChargeFirst, const T& pTrackSameChargeSecond, const T& pTrackOppositeCharge, const float& ptD, const float& phiD, const float& deltaMassCharmHadronForBeauty, const int& activateQA, H2 hMassVsPt, H2 hMassVsPhi)
 {
   auto invMassDplus = RecoDecay::m(std::array{pTrackSameChargeFirst, pTrackSameChargeSecond, pTrackOppositeCharge}, std::array{massPi, massPi, massK});
   if (activateQA) {
     hMassVsPt->Fill(ptD, invMassDplus);
+    if (activateQA > 2) {
+      hMassVsPhi->Fill(phiD, invMassDplus);
+    }
   }
 
-  if (std::abs(invMassDplus - massDPlus) > deltaMassCharmHadronForBeauty || ptD > 10) {
+  if (std::abs(invMassDplus - massDPlus) > deltaMassCharmHadronForBeauty && ptD > 0) {
     return 0;
   }
 
@@ -547,13 +561,16 @@ int8_t isSelectedDplusInMassRange(const T& pTrackSameChargeFirst, const T& pTrac
 /// \param hMassVsPt histo with invariant mass vs pt
 /// \return BIT(0) for KKpi, BIT(1) for piKK, BIT(2) for phipi, BIT(3) for piphi
 template <typename T, typename H2>
-int8_t isSelectedDsInMassRange(const T& pTrackSameChargeFirst, const T& pTrackSameChargeSecond, const T& pTrackOppositeCharge, const float& ptD, int8_t isSelected, const float& deltaMassCharmHadronForBeauty, const int& activateQA, H2 hMassVsPt)
+int8_t isSelectedDsInMassRange(const T& pTrackSameChargeFirst, const T& pTrackSameChargeSecond, const T& pTrackOppositeCharge, const float& ptD, const float& phiD, int8_t isSelected, const float& deltaMassCharmHadronForBeauty, const int& activateQA, H2 hMassVsPt, H2 hMassVsPhi)
 {
   int8_t retValue = 0;
   if (TESTBIT(isSelected, 0)) {
     auto invMassDsToKKPi = RecoDecay::m(std::array{pTrackSameChargeFirst, pTrackOppositeCharge, pTrackSameChargeSecond}, std::array{massK, massK, massPi});
     if (activateQA) {
       hMassVsPt->Fill(ptD, invMassDsToKKPi);
+      if (activateQA > 2) {
+        hMassVsPhi->Fill(phiD, invMassDsToKKPi);
+      }
     }
     if (std::abs(invMassDsToKKPi - massDs) < deltaMassCharmHadronForBeauty || ptD > 10) {
       retValue |= BIT(0);
@@ -563,6 +580,9 @@ int8_t isSelectedDsInMassRange(const T& pTrackSameChargeFirst, const T& pTrackSa
     auto invMassDsToPiKK = RecoDecay::m(std::array{pTrackSameChargeFirst, pTrackOppositeCharge, pTrackSameChargeSecond}, std::array{massPi, massK, massK});
     if (activateQA) {
       hMassVsPt->Fill(ptD, invMassDsToPiKK);
+      if (activateQA > 2) {
+        hMassVsPhi->Fill(phiD, invMassDsToPiKK);
+      }
     }
     if (std::abs(invMassDsToPiKK - massDs) < deltaMassCharmHadronForBeauty || ptD > 10) {
       retValue |= BIT(1);
@@ -583,13 +603,16 @@ int8_t isSelectedDsInMassRange(const T& pTrackSameChargeFirst, const T& pTrackSa
 /// \param hMassVsPt histo with invariant mass vs pt
 /// \return BIT(0) for pKpi with mass cut, BIT(1) for piKp with mass cut
 template <typename T, typename H2>
-int8_t isSelectedLcInMassRange(const T& pTrackSameChargeFirst, const T& pTrackSameChargeSecond, const T& pTrackOppositeCharge, const float& ptLc, const int8_t isSelected, const float& deltaMassCharmHadronForBeauty, const int& activateQA, H2 hMassVsPt)
+int8_t isSelectedLcInMassRange(const T& pTrackSameChargeFirst, const T& pTrackSameChargeSecond, const T& pTrackOppositeCharge, const float& ptLc, const float& phiLc, const int8_t isSelected, const float& deltaMassCharmHadronForBeauty, const int& activateQA, H2 hMassVsPt, H2 hMassVsPhi)
 {
   int8_t retValue = 0;
   if (TESTBIT(isSelected, 0)) {
     auto invMassLcToPKPi = RecoDecay::m(std::array{pTrackSameChargeFirst, pTrackOppositeCharge, pTrackSameChargeSecond}, std::array{massProton, massK, massPi});
     if (activateQA) {
       hMassVsPt->Fill(ptLc, invMassLcToPKPi);
+      if (activateQA > 2) {
+        hMassVsPhi->Fill(phiLc, invMassLcToPKPi);
+      }
     }
     if (std::abs(invMassLcToPKPi - massLc) < deltaMassCharmHadronForBeauty || ptLc > 10) {
       retValue |= BIT(0);
@@ -599,6 +622,9 @@ int8_t isSelectedLcInMassRange(const T& pTrackSameChargeFirst, const T& pTrackSa
     auto invMassLcToPiKP = RecoDecay::m(std::array{pTrackSameChargeFirst, pTrackOppositeCharge, pTrackSameChargeSecond}, std::array{massPi, massK, massProton});
     if (activateQA) {
       hMassVsPt->Fill(ptLc, invMassLcToPiKP);
+      if (activateQA > 2) {
+        hMassVsPhi->Fill(phiLc, invMassLcToPiKP);
+      }
     }
     if (std::abs(invMassLcToPiKP - massLc) < deltaMassCharmHadronForBeauty || ptLc > 10) {
       retValue |= BIT(1);
@@ -619,13 +645,16 @@ int8_t isSelectedLcInMassRange(const T& pTrackSameChargeFirst, const T& pTrackSa
 /// \param hMassVsPt histo with invariant mass vs pt
 /// \return BIT(0) for pKpi with mass cut, BIT(1) for piKp with mass cut
 template <typename T, typename H2>
-int8_t isSelectedXicInMassRange(const T& pTrackSameChargeFirst, const T& pTrackSameChargeSecond, const T& pTrackOppositeCharge, const float& ptXic, const int8_t isSelected, const float& deltaMassCharmHadronForBeauty, const int& activateQA, H2 hMassVsPt)
+int8_t isSelectedXicInMassRange(const T& pTrackSameChargeFirst, const T& pTrackSameChargeSecond, const T& pTrackOppositeCharge, const float& ptXic, const float& phiXic, const int8_t isSelected, const float& deltaMassCharmHadronForBeauty, const int& activateQA, H2 hMassVsPt, H2 hMassVsPhi)
 {
   int8_t retValue = 0;
   if (TESTBIT(isSelected, 0)) {
     auto invMassXicToPKPi = RecoDecay::m(std::array{pTrackSameChargeFirst, pTrackOppositeCharge, pTrackSameChargeSecond}, std::array{massProton, massK, massPi});
     if (activateQA) {
       hMassVsPt->Fill(ptXic, invMassXicToPKPi);
+      if (activateQA > 2) {
+        hMassVsPhi->Fill(phiXic, invMassXicToPKPi);
+      }
     }
     if (std::abs(invMassXicToPKPi - massXic) < deltaMassCharmHadronForBeauty || ptXic > 10) {
       retValue |= BIT(0);
@@ -635,6 +664,9 @@ int8_t isSelectedXicInMassRange(const T& pTrackSameChargeFirst, const T& pTrackS
     auto invMassXicToPiKP = RecoDecay::m(std::array{pTrackSameChargeFirst, pTrackOppositeCharge, pTrackSameChargeSecond}, std::array{massPi, massK, massProton});
     if (activateQA) {
       hMassVsPt->Fill(ptXic, invMassXicToPiKP);
+      if (activateQA > 2) {
+        hMassVsPhi->Fill(phiXic, invMassXicToPiKP);
+      }
     }
     if (std::abs(invMassXicToPiKP - massXic) < deltaMassCharmHadronForBeauty || ptXic > 10) {
       retValue |= BIT(1);
@@ -802,7 +834,7 @@ int computeNumberOfCandidates(std::vector<std::vector<T>> indices)
 /// \param mlModelPathCCDB is the model path in CCDB
 /// \param timestampCCDB is the CCDB timestamp
 /// \return the pointer to the ONNX Ort::Experimental::Session
-Ort::Experimental::Session* InitONNXSession(std::string& onnxFile, std::string partName, Ort::Env& env, Ort::SessionOptions& sessionOpt, std::vector<std::vector<int64_t>>& inputShapes, int& dataType, bool loadModelsFromCCDB, o2::ccdb::CcdbApi& ccdbApi, std::string mlModelPathCCDB, long timestampCCDB)
+Ort::Experimental::Session* InitONNXSession(std::string& onnxFile, std::string partName, Ort::Env& env, Ort::SessionOptions& sessionOpt, std::vector<std::vector<int64_t>>& inputShapes, int& dataType, bool loadModelsFromCCDB, o2::ccdb::CcdbApi& ccdbApi, std::string mlModelPathCCDB, int64_t timestampCCDB)
 {
   // hard coded, we do not let the user change this
   sessionOpt.SetIntraOpNumThreads(1);
@@ -951,6 +983,7 @@ DECLARE_SOA_COLUMN(NsigmaPrTOF3, nsigmaPrTOF3, float);           //!
 DECLARE_SOA_COLUMN(FlagOrigin, flagOrigin, int8_t);              //!
 DECLARE_SOA_COLUMN(Channel, channel, int8_t);                    //!
 DECLARE_SOA_COLUMN(HFSelBit, hfselbit, int8_t);                  //!
+DECLARE_SOA_COLUMN(IsInCorrectColl, isInCorrectColl, bool);      //!
 } // namespace hftraining
 
 DECLARE_SOA_TABLE(HFTrigTrain2P, "AOD", "HFTRIGTRAIN2P", //!
@@ -971,7 +1004,8 @@ DECLARE_SOA_TABLE(HFTrigTrain2P, "AOD", "HFTRIGTRAIN2P", //!
                   hftraining::NsigmaKaTPC2,
                   hftraining::NsigmaPiTOF2,
                   hftraining::NsigmaKaTOF2,
-                  hftraining::FlagOrigin);
+                  hftraining::FlagOrigin,
+                  hftraining::IsInCorrectColl);
 DECLARE_SOA_TABLE(HFTrigTrain3P, "AOD", "HFTRIGTRAIN3P", //!
                   hftraining::InvMassDplus,
                   hftraining::InvMassDsToKKPi,
@@ -1012,7 +1046,8 @@ DECLARE_SOA_TABLE(HFTrigTrain3P, "AOD", "HFTRIGTRAIN3P", //!
                   hftraining::NsigmaPrTOF3,
                   hftraining::FlagOrigin,
                   hftraining::Channel,
-                  hftraining::HFSelBit);
+                  hftraining::HFSelBit,
+                  hftraining::IsInCorrectColl);
 
 namespace hfoptimisationTree
 {
@@ -1057,4 +1092,4 @@ DECLARE_SOA_TABLE(HFOptimisationTreeCollisions, "AOD", "HFOPTIMTREECOLL", //!
                   hfoptimisationTree::CollisionIndex)
 } // namespace o2::aod
 
-#endif // O2_ANALYSIS_HF_FILTER_HELPERS_
+#endif // EVENTFILTERING_PWGHF_HFFILTERHELPERS_H_

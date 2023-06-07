@@ -47,6 +47,8 @@
 
 #include "ReconstructionDataFormats/Track.h"
 
+#include "PWGLF/DataModel/LFSlimNucleiTables.h"
+
 using namespace o2;
 using namespace o2::framework;
 using namespace o2::framework::expressions;
@@ -75,16 +77,18 @@ float getBinCenter(uint8_t bin, double max)
 }
 
 struct NucleusCandidate {
-  NucleusCandidate(int idx, float aPt, float aEta, uint8_t aITSclsMap, uint8_t aTPCnCls, int8_t aDCAxy, int8_t aDCAz, uint16_t aFlags, uint8_t aTPCnsigma, uint8_t aTOFmass) : globalIndex(idx), pt(aPt), eta(aEta), ITSclsMap(aITSclsMap), TPCnCls(aTPCnCls), DCAxy(aDCAxy), DCAz(aDCAz), flags(aFlags), TPCnsigma(aTPCnsigma), TOFmass(aTOFmass)
+  NucleusCandidate(int idx, float aPt, float aEta, float aphi, uint8_t z, uint8_t aITSclsMap, uint8_t aTPCnCls, uint8_t aDCAxy, uint8_t aDCAz, uint16_t aFlags, uint8_t aTPCnsigma, uint8_t aTOFmass) : globalIndex{idx}, pt{aPt}, eta{aEta}, phi{aphi}, zVertex{z}, ITSclsMap{aITSclsMap}, TPCnCls{aTPCnCls}, DCAxy{aDCAxy}, DCAz{aDCAz}, flags{aFlags}, TPCnsigma{aTPCnsigma}, TOFmass{aTOFmass}
   {
   }
   int globalIndex;
   float pt;
   float eta;
+  float phi;
+  uint8_t zVertex;
   uint8_t ITSclsMap;
   uint8_t TPCnCls;
-  int8_t DCAxy;
-  int8_t DCAz;
+  uint8_t DCAxy;
+  uint8_t DCAz;
   uint16_t flags;
   uint8_t TPCnsigma;
   uint8_t TOFmass;
@@ -124,7 +128,7 @@ constexpr int TreeConfigDefault[4][2]{
   {0, 0}};
 constexpr double BinnedVariablesDefaultMax[5][1]{
   {1.27},
-  {2.54},
+  {1.27},
   {5.08},
   {5.08},
   {5.08}};
@@ -149,58 +153,17 @@ std::shared_ptr<TH3> hNsigma[2][4][2];
 std::shared_ptr<TH3> hTOFmass[4][2];
 std::shared_ptr<TH2> hGenNuclei[4][2];
 std::shared_ptr<TH3> hMomRes[4][2];
+std::shared_ptr<TH3> hNsigmaEta[2][4][2];
+std::shared_ptr<TH3> hTOFmassEta[4][2];
 std::shared_ptr<TH3> hDCAxy[2][4][2];
+std::shared_ptr<TH3> hDCAz[2][4][2];
+std::shared_ptr<TH2> hGloTOFtracks[2];
 o2::base::MatLayerCylSet* lut = nullptr;
 
 std::vector<NucleusCandidate> candidates;
 } // namespace nuclei
 
-namespace o2::aod
-{
-namespace NucleiTableNS
-{
-DECLARE_SOA_COLUMN(Pt, pt, float);
-DECLARE_SOA_COLUMN(Eta, eta, float);
-DECLARE_SOA_COLUMN(ITSclsMap, itsClsMap, uint8_t);
-DECLARE_SOA_COLUMN(TPCnCls, tpcNCls, uint8_t);
-DECLARE_SOA_COLUMN(DCAxy, dcaxy, int8_t);
-DECLARE_SOA_COLUMN(DCAz, dcaz, int8_t);
-DECLARE_SOA_COLUMN(Flags, flags, uint16_t);
-DECLARE_SOA_COLUMN(TPCnsigma, tpcnsigma, uint8_t);
-DECLARE_SOA_COLUMN(TOFmass, tofmass, uint8_t);
-DECLARE_SOA_COLUMN(gPt, genPt, float);
-DECLARE_SOA_COLUMN(gEta, genEta, float);
-DECLARE_SOA_COLUMN(PDGcode, pdgCode, int);
-
-} // namespace NucleiTableNS
-DECLARE_SOA_TABLE(NucleiTable, "AOD", "NUCLEITABLE",
-                  NucleiTableNS::Pt,
-                  NucleiTableNS::Eta,
-                  NucleiTableNS::ITSclsMap,
-                  NucleiTableNS::TPCnCls,
-                  NucleiTableNS::DCAxy,
-                  NucleiTableNS::DCAz,
-                  NucleiTableNS::Flags,
-                  NucleiTableNS::TPCnsigma,
-                  NucleiTableNS::TOFmass)
-
-DECLARE_SOA_TABLE(NucleiTableMC, "AOD", "NUCLEITABLEMC",
-                  NucleiTableNS::Pt,
-                  NucleiTableNS::Eta,
-                  NucleiTableNS::ITSclsMap,
-                  NucleiTableNS::TPCnCls,
-                  NucleiTableNS::DCAxy,
-                  NucleiTableNS::DCAz,
-                  NucleiTableNS::Flags,
-                  NucleiTableNS::TPCnsigma,
-                  NucleiTableNS::TOFmass,
-                  NucleiTableNS::gPt,
-                  NucleiTableNS::gEta,
-                  NucleiTableNS::PDGcode)
-
-} // namespace o2::aod
-
-struct NucleiSpectraTask {
+struct nucleiSpectra {
   enum {
     kDeuteron = BIT(0),
     kTriton = BIT(1),
@@ -224,6 +187,7 @@ struct NucleiSpectraTask {
   Configurable<float> cfgCutEta{"cfgCutEta", 0.8f, "Eta range for tracks"};
   Configurable<float> cfgCutRapidityMin{"cfgCutRapidityMin", -0.5, "Minimum rapidity for tracks"};
   Configurable<float> cfgCutRapidityMax{"cfgCutRapidityMax", 0.5, "Maximum rapidity for tracks"};
+  Configurable<bool> cfgCutOnReconstructedRapidity{"cfgCutOnReconstructedRapidity", false, "Cut on reconstructed rapidity"};
   Configurable<float> cfgCutNclusITS{"cfgCutNclusITS", 5, "Minimum number of ITS clusters"};
   Configurable<float> cfgCutNclusTPC{"cfgCutNclusTPC", 70, "Minimum number of TPC clusters"};
 
@@ -234,10 +198,10 @@ struct NucleiSpectraTask {
   Configurable<LabeledArray<int>> cfgTreeConfig{"cfgTreeConfig", {nuclei::TreeConfigDefault[0], 4, 2, nuclei::names, nuclei::treeConfigNames}, "Filtered trees configuration"};
   Configurable<LabeledArray<double>> cfgBinnedVariables{"cfgBinnedVariables", {nuclei::BinnedVariablesDefaultMax[0], 5, 1, nuclei::binnedVariableNames, nuclei::binnedLabelNames}, "Maximum value for the binned variables"};
 
-  ConfigurableAxis cfgDCAxyBinsDeuterons{"cfgDCAxyBinsDeuterons", {300, -3.f, 3.f}, "DCAxy binning for Deuterons"};
-  ConfigurableAxis cfgDCAxyBinsTritons{"cfgDCAxyBinsTritons", {300, -3.f, 3.f}, "DCAxy binning for Tritons"};
-  ConfigurableAxis cfgDCAxyBinsHe3{"cfgDCAxyBinsHe3", {300, -3.f, 3.f}, "DCAxy binning for He3"};
-  ConfigurableAxis cfgDCAxyBinsAlpha{"cfgDCAxyBinsAlpha", {300, -3.f, 3.f}, "DCAxy binning for Alpha"};
+  ConfigurableAxis cfgDCAxyBinsDeuterons{"cfgDCAxyBinsDeuterons", {1500, -1.5f, 1.5f}, "DCAxy binning for Deuterons"};
+  ConfigurableAxis cfgDCAxyBinsTritons{"cfgDCAxyBinsTritons", {1500, -1.5f, 1.5f}, "DCAxy binning for Tritons"};
+  ConfigurableAxis cfgDCAxyBinsHe3{"cfgDCAxyBinsHe3", {1500, -1.5f, 1.5f}, "DCAxy binning for He3"};
+  ConfigurableAxis cfgDCAxyBinsAlpha{"cfgDCAxyBinsAlpha", {1500, -1.5f, 1.5f}, "DCAxy binning for Alpha"};
 
   ConfigurableAxis cfgPtBinsDeuterons{"cfgPtBinsDeuterons", {100, 0., 10.}, "Pt binning for Deuterons"};
   ConfigurableAxis cfgPtBinsTritons{"cfgPtBinsTritons", {100, 0., 10.}, "Pt binning for Tritons"};
@@ -275,35 +239,24 @@ struct NucleiSpectraTask {
       return;
     }
     auto run3grp_timestamp = bc.timestamp();
-
-    o2::parameters::GRPObject* grpo = ccdb->getForTimeStamp<o2::parameters::GRPObject>(cfgGRPpath, run3grp_timestamp);
-    o2::parameters::GRPMagField* grpmag = 0x0;
-    if (grpo) {
-      o2::base::Propagator::initFieldFromGRP(grpo);
-      if (cfgBz < -990) {
-        // Fetch magnetic field from ccdb for current collision
-        mBz = grpo->getNominalL3Field();
-        LOG(info) << "Retrieved GRP for timestamp " << run3grp_timestamp << " with magnetic field of " << mBz << " kZG";
-      } else {
-        mBz = cfgBz;
-      }
-    } else {
-      grpmag = ccdb->getForTimeStamp<o2::parameters::GRPMagField>(cfgGRPmagPath, run3grp_timestamp);
-      if (!grpmag) {
-        LOG(fatal) << "Got nullptr from CCDB for path " << cfgGRPmagPath << " of object GRPMagField and " << cfgGRPpath << " of object GRPObject for timestamp " << run3grp_timestamp;
-      }
-      o2::base::Propagator::initFieldFromGRP(grpmag);
-      if (cfgBz < -990) {
-        // Fetch magnetic field from ccdb for current collision
-        mBz = std::lround(5.f * grpmag->getL3Current() / 30000.f);
-        LOG(info) << "Retrieved GRP for timestamp " << run3grp_timestamp << " with magnetic field of " << mBz << " kZG";
-      } else {
-        mBz = cfgBz;
-      }
-    }
     mRunNumber = bc.runNumber();
-    o2::base::Propagator::initFieldFromGRP(grpmag);
-    o2::base::Propagator::Instance()->setMatLUT(nuclei::lut);
+
+    if (cfgBz > -990) {
+      mBz = cfgBz;
+    } else {
+      o2::parameters::GRPObject* grpo{ccdb->getForTimeStamp<o2::parameters::GRPObject>(cfgGRPpath, run3grp_timestamp)};
+      o2::parameters::GRPMagField* grpmag{nullptr};
+      if (grpo) {
+        mBz = grpo->getNominalL3Field();
+      } else {
+        grpmag = ccdb->getForTimeStamp<o2::parameters::GRPMagField>(cfgGRPmagPath, run3grp_timestamp);
+        if (!grpmag) {
+          LOG(fatal) << "Got nullptr from CCDB for path " << cfgGRPmagPath << " of object GRPMagField and " << cfgGRPpath << " of object GRPObject for timestamp " << run3grp_timestamp;
+        }
+        mBz = std::lround(5.f * grpmag->getL3Current() / 30000.f);
+      }
+      LOG(info) << "Retrieved GRP for timestamp " << run3grp_timestamp << " with magnetic field of " << mBz << " kZG";
+    }
   }
 
   void init(o2::framework::InitContext&)
@@ -323,23 +276,35 @@ struct NucleiSpectraTask {
       {cfgPtBinsTritons, "#it{p}_{T} (GeV/#it{c})"},
       {cfgPtBinsHe3, "#it{p}_{T} (GeV/#it{c})"},
       {cfgPtBinsAlpha, "#it{p}_{T} (GeV/#it{c})"}};
-    const AxisSpec dcaAxes[4]{
+    const AxisSpec dcaxyAxes[4]{
       {cfgDCAxyBinsDeuterons, "DCA_{xy} (cm)"},
       {cfgDCAxyBinsTritons, "DCA_{xy} (cm)"},
       {cfgDCAxyBinsHe3, "DCA_{xy} (cm)"},
       {cfgDCAxyBinsAlpha, "DCA_{xy} (cm)"}};
+    const AxisSpec dcazAxes[4]{
+      {cfgDCAxyBinsDeuterons, "DCA_{z} (cm)"},
+      {cfgDCAxyBinsTritons, "DCA_{z} (cm)"},
+      {cfgDCAxyBinsHe3, "DCA_{z} (cm)"},
+      {cfgDCAxyBinsAlpha, "DCA_{z} (cm)"}};
+    const AxisSpec etaAxis{40, -1., 1., "#eta"};
 
     spectra.add("hRecVtxZData", "collision z position", HistType::kTH1F, {{200, -20., +20., "z position (cm)"}});
     spectra.add("hTpcSignalData", "Specific energy loss", HistType::kTH2F, {{600, -6., 6., "#it{p} (GeV/#it{c})"}, {1400, 0, 1400, "d#it{E} / d#it{X} (a. u.)"}});
+    spectra.add("hTpcSignalDataSelected", "Specific energy loss for selected particles", HistType::kTH2F, {{600, -6., 6., "#it{p} (GeV/#it{c})"}, {1400, 0, 1400, "d#it{E} / d#it{X} (a. u.)"}});
     spectra.add("hTofSignalData", "TOF beta", HistType::kTH2F, {{500, 0., 5., "#it{p} (GeV/#it{c})"}, {750, 0, 1.5, "TOF #beta"}});
     for (int iC{0}; iC < 2; ++iC) {
+      nuclei::hGloTOFtracks[iC] = spectra.add<TH2>(fmt::format("hTPCTOFtracks{}", nuclei::matter[iC]).data(), fmt::format("Global vs TOF matched {} tracks in a collision", nuclei::chargeLabelNames[iC]).data(), HistType::kTH2D, {{300, -0.5, 300.5, "Number of global tracks"}, {300, -0.5, 300.5, "Number of TOF matched tracks"}});
+
       for (int iS{0}; iS < nuclei::species; ++iS) {
         nuclei::hNsigma[0][iS][iC] = spectra.add<TH3>(fmt::format("h{}nsigma{}_{}", nuclei::pidName[0], nuclei::matter[iC], nuclei::names[iS]).data(), fmt::format("n#sigma_{{}} {} {}", nuclei::pidName[0], nuclei::matter[iC], nuclei::names[iS]).data(), HistType::kTH3D, {centAxis, ptAxes[iS], nSigmaAxes[0]});
+        nuclei::hNsigmaEta[0][iS][iC] = spectra.add<TH3>(fmt::format("h{}nsigmaEta{}_{}", nuclei::pidName[0], nuclei::matter[iC], nuclei::names[iS]).data(), fmt::format("n#sigma_{{}} {} {} vs #eta", nuclei::pidName[0], nuclei::matter[iC], nuclei::names[iS]).data(), HistType::kTH3D, {etaAxis, ptAxes[iS], nSigmaAxes[0]});
 
         for (int iPID{0}; iPID < 2; ++iPID) {
-          nuclei::hDCAxy[iPID][iS][iC] = spectra.add<TH3>(fmt::format("hDCAxy{}_{}_{}", nuclei::pidName[iPID], nuclei::matter[iC], nuclei::names[iS]).data(), fmt::format("DCAxy {} {} {}", nuclei::pidName[iPID], nuclei::matter[iC], nuclei::names[iS]).data(), HistType::kTH3D, {centAxis, ptAxes[iS], dcaAxes[iS]});
+          nuclei::hDCAxy[iPID][iS][iC] = spectra.add<TH3>(fmt::format("hDCAxy{}_{}_{}", nuclei::pidName[iPID], nuclei::matter[iC], nuclei::names[iS]).data(), fmt::format("DCAxy {} {} {}", nuclei::pidName[iPID], nuclei::matter[iC], nuclei::names[iS]).data(), HistType::kTH3D, {centAxis, ptAxes[iS], dcaxyAxes[iS]});
+          nuclei::hDCAz[iPID][iS][iC] = spectra.add<TH3>(fmt::format("hDCAz{}_{}_{}", nuclei::pidName[iPID], nuclei::matter[iC], nuclei::names[iS]).data(), fmt::format("DCAz {} {} {}", nuclei::pidName[iPID], nuclei::matter[iC], nuclei::names[iS]).data(), HistType::kTH3D, {centAxis, ptAxes[iS], dcazAxes[iS]});
         }
         nuclei::hTOFmass[iS][iC] = spectra.add<TH3>(fmt::format("h{}TOFmass{}", nuclei::matter[iC], nuclei::names[iS]).data(), fmt::format("TOF mass - {}  PDG mass", nuclei::names[iS]).data(), HistType::kTH3D, {centAxis, ptAxes[iS], tofMassAxis});
+        nuclei::hTOFmassEta[iS][iC] = spectra.add<TH3>(fmt::format("h{}TOFmassEta{}", nuclei::matter[iC], nuclei::names[iS]).data(), fmt::format("TOF mass - {}  PDG mass", nuclei::names[iS]).data(), HistType::kTH3D, {etaAxis, ptAxes[iS], tofMassAxis});
         nuclei::hMomRes[iS][iC] = spectra.add<TH3>(fmt::format("h{}MomRes{}", nuclei::matter[iC], nuclei::names[iS]).data(), fmt::format("Momentum resolution {}", nuclei::names[iS]).data(), HistType::kTH3D, {centAxis, ptAxes[iS], ptResAxis});
         nuclei::hGenNuclei[iS][iC] = spectra.add<TH2>(fmt::format("h{}Gen{}", nuclei::matter[iC], nuclei::names[iS]).data(), fmt::format("Generated {}", nuclei::names[iS]).data(), HistType::kTH2D, {centAxis, ptAxes[iS]});
       }
@@ -352,9 +317,11 @@ struct NucleiSpectraTask {
     }
 
     nuclei::lut = o2::base::MatLayerCylSet::rectifyPtrFromFile(ccdb->get<o2::base::MatLayerCylSet>("GLO/Param/MatLUT"));
+    o2::base::Propagator::Instance(true)->setMatLUT(nuclei::lut);
   }
 
-  void fillDataInfo(soa::Filtered<soa::Join<aod::Collisions, aod::EvSels>>::iterator const& collision, TrackCandidates const& tracks)
+  template <typename TC>
+  void fillDataInfo(soa::Filtered<soa::Join<aod::Collisions, aod::EvSels>>::iterator const& collision, TC const& tracks)
   {
     auto bc = collision.bc_as<aod::BCsWithTimestamps>();
     initCCDB(bc);
@@ -367,6 +334,7 @@ struct NucleiSpectraTask {
     spectra.fill(HIST("hRecVtxZData"), collision.posZ());
 
     const o2::math_utils::Point3D<float> collVtx{collision.posX(), collision.posY(), collision.posZ()};
+    uint8_t zVert{getBinnedValue(collision.posZ(), 10.16)};
 
     const double bgScalings[4][2]{
       {nuclei::charges[0] * cfgMomentumScalingBetheBloch->get(0u, 0u) / nuclei::masses[0], nuclei::charges[0] * cfgMomentumScalingBetheBloch->get(0u, 1u) / nuclei::masses[0]},
@@ -374,6 +342,7 @@ struct NucleiSpectraTask {
       {nuclei::charges[2] * cfgMomentumScalingBetheBloch->get(2u, 0u) / nuclei::masses[2], nuclei::charges[2] * cfgMomentumScalingBetheBloch->get(2u, 1u) / nuclei::masses[2]},
       {nuclei::charges[3] * cfgMomentumScalingBetheBloch->get(3u, 0u) / nuclei::masses[3], nuclei::charges[3] * cfgMomentumScalingBetheBloch->get(3u, 1u) / nuclei::masses[3]}};
 
+    int nGloTracks[2]{0, 0}, nTOFTracks[2]{0, 0};
     for (auto& track : tracks) { // start loop over tracks
       if (track.itsNCls() < cfgCutNclusITS ||
           track.tpcNClsFound() < cfgCutNclusTPC ||
@@ -383,10 +352,18 @@ struct NucleiSpectraTask {
           track.itsChi2NCl() > 36.f) {
         continue;
       }
+      spectra.fill(HIST("hTpcSignalData"), track.tpcInnerParam() * track.sign(), track.tpcSignal());
       float nSigma[2][4]{
         {-10., -10., -10., -10.},
         {0.f, 0.f, 0.f, 0.f}}; /// then we will calibrate the TOF mass for the He3 and Alpha
       const int iC{track.sign() < 0};
+
+      /// Checking if we have outliers in the TPC-TOF correlation
+      nGloTracks[iC]++;
+      if (track.hasTOF()) {
+        nTOFTracks[iC]++;
+      }
+
       bool selectedTPC[4]{false}, goodToAnalyse{false};
       for (int iS{0}; iS < nuclei::species; ++iS) {
         double expBethe{tpc::BetheBlochAleph(static_cast<double>(track.tpcInnerParam() * bgScalings[iS][iC]), cfgBetheBlochParams->get(iS, 0u), cfgBetheBlochParams->get(iS, 1u), cfgBetheBlochParams->get(iS, 2u), cfgBetheBlochParams->get(iS, 3u), cfgBetheBlochParams->get(iS, 4u))};
@@ -401,11 +378,12 @@ struct NucleiSpectraTask {
 
       auto trackParCov = getTrackParCov(track); // should we set the charge according to the nucleus?
       gpu::gpustd::array<float, 2> dcaInfo;
-      o2::base::Propagator::Instance()->propagateToDCABxByBz(collVtx, trackParCov, 2.f, static_cast<o2::base::Propagator::MatCorrType>(cfgMaterialCorrection.value), &dcaInfo);
+      o2::base::Propagator::Instance()->propagateToDCA(collVtx, trackParCov, mBz, 2.f, static_cast<o2::base::Propagator::MatCorrType>(cfgMaterialCorrection.value), &dcaInfo);
 
       float beta{responseBeta.GetBeta(track)};
-      spectra.fill(HIST("hTpcSignalData"), track.tpcInnerParam() * track.sign(), track.tpcSignal());
+      spectra.fill(HIST("hTpcSignalDataSelected"), track.tpcInnerParam() * track.sign(), track.tpcSignal());
       spectra.fill(HIST("hTofSignalData"), track.tpcInnerParam(), beta);
+      beta = std::min(1.f - 1.e-6f, std::max(1.e-4f, beta)); /// sometimes beta > 1 or < 0, to be chec
       for (int iS{0}; iS < nuclei::species; ++iS) {
         bool selectedTOF{false};
         if (std::abs(dcaInfo[1]) > cfgDCAcut->get(iS, 1)) {
@@ -413,7 +391,7 @@ struct NucleiSpectraTask {
         }
         ROOT::Math::LorentzVector<ROOT::Math::PtEtaPhiM4D<float>> fvector{trackParCov.getPt() * nuclei::charges[iS], trackParCov.getEta(), trackParCov.getPhi(), nuclei::masses[iS]};
         float y{fvector.Rapidity() + cfgCMrapidity};
-        if (y < cfgCutRapidityMin || y > cfgCutRapidityMax) {
+        if (cfgCutOnReconstructedRapidity && (y < cfgCutRapidityMin || y > cfgCutRapidityMax)) {
           continue;
         }
 
@@ -425,50 +403,61 @@ struct NucleiSpectraTask {
               selectedTOF = true;
             }
             nuclei::hDCAxy[iPID][iS][iC]->Fill(1., fvector.pt(), dcaInfo[0]);
+            nuclei::hDCAz[iPID][iS][iC]->Fill(1., fvector.pt(), dcaInfo[1]);
             if (std::abs(dcaInfo[0]) < cfgDCAcut->get(iS, 0u)) {
               if (!iPID) { /// temporary exclusion of the TOF nsigma PID for the He3 and Alpha
                 nuclei::hNsigma[iPID][iS][iC]->Fill(1., fvector.pt(), nSigma[iPID][iS]);
+                nuclei::hNsigmaEta[iPID][iS][iC]->Fill(fvector.eta(), fvector.pt(), nSigma[iPID][iS]);
               }
               if (iPID) {
                 float mass{track.tpcInnerParam() * nuclei::charges[iS] * std::sqrt(1.f / (beta * beta) - 1.f) - nuclei::masses[iS]};
                 nuclei::hTOFmass[iS][iC]->Fill(1., fvector.pt(), mass);
+                nuclei::hTOFmassEta[iS][iC]->Fill(fvector.eta(), fvector.pt(), mass);
               }
             }
           }
         }
         uint16_t flag{kIsReconstructed};
         if (cfgTreeConfig->get(iS, 0u) && selectedTPC[iS]) {
-          int8_t massTOF{0u};
+          uint8_t massTOF{0u};
           if (cfgTreeConfig->get(iS, 1u) && !selectedTOF) {
             continue;
           }
           if (track.hasTOF()) {
             flag |= kHasTOF;
-            massTOF = getBinnedValue(beta > 1.e-6f ? track.tpcInnerParam() * nuclei::charges[iS] * std::sqrt(1.f / (beta * beta) - 1.f) - nuclei::masses[iS] : -999.f, cfgBinnedVariables->get(4u, 1u));
+            float mass{track.tpcInnerParam() * nuclei::charges[iS] * std::sqrt(1.f / (beta * beta) - 1.f) - nuclei::masses[iS]};
+            massTOF = getBinnedValue(mass, cfgBinnedVariables->get(3u, 1u));
           }
           flag |= BIT(iS);
-          int8_t dcaxy = getBinnedValue(dcaInfo[0], cfgBinnedVariables->get(0u, 1u));
-          int8_t dcaz = getBinnedValue(dcaInfo[1], cfgBinnedVariables->get(1u, 1u));
-          int8_t nsigmaTPC = getBinnedValue(nSigma[0][iS], cfgBinnedVariables->get(2u, 1u));
+          uint8_t dcaxy = getBinnedValue(dcaInfo[0], cfgBinnedVariables->get(0u, 1u));
+          uint8_t dcaz = getBinnedValue(dcaInfo[1], cfgBinnedVariables->get(1u, 1u));
+          uint8_t nsigmaTPC = getBinnedValue(nSigma[0][iS], cfgBinnedVariables->get(2u, 1u));
 
-          nuclei::candidates.emplace_back(track.globalIndex(), fvector.pt(), fvector.eta(), track.itsClusterMap(), track.tpcNClsFound(), dcaxy, dcaz, flag, nsigmaTPC, massTOF);
+          nuclei::candidates.emplace_back(track.globalIndex(), track.sign() * fvector.pt(), fvector.eta(), fvector.phi(), zVert, track.itsClusterMap(), track.tpcNClsFound(), dcaxy, dcaz, flag, nsigmaTPC, massTOF);
         }
       }
     } // end loop over tracks
+
+    nuclei::hGloTOFtracks[0]->Fill(nGloTracks[0], nTOFTracks[0]);
+    nuclei::hGloTOFtracks[1]->Fill(nGloTracks[1], nTOFTracks[1]);
   }
 
   void processData(soa::Filtered<soa::Join<aod::Collisions, aod::EvSels>>::iterator const& collision, TrackCandidates const& tracks, aod::BCsWithTimestamps const&)
   {
     fillDataInfo(collision, tracks);
     for (auto& c : nuclei::candidates) {
-      nucleiTable(c.pt, c.eta, c.ITSclsMap, c.TPCnCls, c.DCAxy, c.DCAz, c.flags, c.TPCnsigma, c.TOFmass);
+      nucleiTable(c.pt, c.eta, c.phi, c.zVertex, c.ITSclsMap, c.TPCnCls, c.DCAxy, c.DCAz, c.flags, c.TPCnsigma, c.TOFmass);
     }
   }
-  PROCESS_SWITCH(NucleiSpectraTask, processData, "Data analysis", true);
+  PROCESS_SWITCH(nucleiSpectra, processData, "Data analysis", true);
 
-  void processMC(soa::Filtered<soa::Join<aod::Collisions, aod::EvSels>>::iterator const& collision, TrackCandidates const& tracks, aod::McTrackLabels const& trackLabelsMC, aod::McParticles const& particlesMC, aod::BCsWithTimestamps const&)
+  Preslice<TrackCandidates> tracksPerCollisions = aod::track::collisionId;
+  void processMC(soa::Filtered<soa::Join<aod::Collisions, aod::EvSels>> const& collisions, TrackCandidates const& tracks, aod::McTrackLabels const& trackLabelsMC, aod::McParticles const& particlesMC, aod::BCsWithTimestamps const&)
   {
-    fillDataInfo(collision, tracks);
+    for (auto& collision : collisions) {
+      const auto& slicedTracks = tracks.sliceBy(tracksPerCollisions, collision.globalIndex());
+      fillDataInfo(collision, slicedTracks);
+    }
     std::vector<bool> isReconstructed(particlesMC.size(), false);
     for (auto& c : nuclei::candidates) {
       auto label = trackLabelsMC.iteratorAt(c.globalIndex);
@@ -485,7 +474,7 @@ struct NucleiSpectraTask {
         c.flags |= kIsSecondaryFromMaterial;
       }
 
-      nucleiTableMC(c.pt, c.eta, c.ITSclsMap, c.TPCnCls, c.DCAxy, c.DCAz, c.flags, c.TPCnsigma, c.TOFmass, particle.pt(), particle.eta(), particle.pdgCode());
+      nucleiTableMC(c.pt, c.eta, c.phi, c.zVertex, c.ITSclsMap, c.TPCnCls, c.DCAxy, c.DCAz, c.flags, c.TPCnsigma, c.TOFmass, particle.pt(), particle.eta(), particle.phi(), particle.pdgCode());
       for (int iS{0}; iS < nuclei::species; ++iS) {
         if (std::abs(particle.pdgCode()) == nuclei::codes[iS]) {
           nuclei::hMomRes[iS][particle.pdgCode() < 0]->Fill(1., std::abs(c.pt), 1. - std::abs(c.pt) / particle.pt());
@@ -514,18 +503,18 @@ struct NucleiSpectraTask {
         }
 
         if (!isReconstructed[index] && (cfgTreeConfig->get(iS, 0u) || cfgTreeConfig->get(iS, 1u))) {
-          nucleiTableMC(0, 0, 0, 0, 0, 0, flags, 0, 0, particle.pt(), particle.eta(), particle.pdgCode());
+          nucleiTableMC(0, 0, 0, 0, 0, 0, 0, 0, flags, 0, 0, particle.pt(), particle.eta(), particle.phi(), particle.pdgCode());
         }
         break;
       }
       index++;
     }
   }
-  PROCESS_SWITCH(NucleiSpectraTask, processMC, "MC analysis", false);
+  PROCESS_SWITCH(nucleiSpectra, processMC, "MC analysis", false);
 };
 
 WorkflowSpec defineDataProcessing(ConfigContext const& cfgc)
 {
   return WorkflowSpec{
-    adaptAnalysisTask<NucleiSpectraTask>(cfgc, TaskName{"nuclei-spectra"})};
+    adaptAnalysisTask<nucleiSpectra>(cfgc, TaskName{"nuclei-spectra"})};
 }

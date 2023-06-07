@@ -52,7 +52,8 @@ using namespace o2;
 using namespace o2::framework;
 using namespace o2::framework::expressions;
 
-using tracksAndTPCInfo = soa::Join<aod::Tracks, aod::TracksExtra, aod::TracksDCA, aod::pidTPCFullEl, aod::pidTPCFullPi, aod::TracksCov>;
+// using tracksAndTPCInfo = soa::Join<aod::Tracks, aod::TracksExtra, aod::TracksDCA, aod::pidTPCFullEl, aod::pidTPCFullPi, aod::TracksCov>;
+using tracksAndTPCInfo = soa::Join<aod::TracksIU, aod::TracksExtra, aod::TracksDCA, aod::pidTPCFullEl, aod::pidTPCFullPi, aod::TracksCovIU>;
 using tracksAndTPCInfoMC = soa::Join<tracksAndTPCInfo, aod::McTrackLabels>;
 
 struct skimmerGammaConversions {
@@ -180,7 +181,8 @@ struct skimmerGammaConversions {
            theTrack.tpcNClsFindable(), theTrack.tpcNClsFindableMinusFound(), theTrack.tpcNClsFindableMinusCrossedRows(),
            theTrack.tpcChi2NCl(), theTrack.tpcInnerParam(), theTrack.tpcSignal(),
            theTrack.tpcNSigmaEl(), theTrack.tpcNSigmaPi(),
-           theTrack.itsClusterMap(), theTrack.itsChi2NCl(), theTrack.detectorMap());
+           theTrack.itsClusterMap(), theTrack.itsChi2NCl(), theTrack.detectorMap(),
+           theTrack.x(), theTrack.y(), theTrack.z(), theTrack.snp(), theTrack.tgl(), theTrack.alpha(), theTrack.signed1Pt());
   }
 
   template <typename TV0>
@@ -282,7 +284,6 @@ struct skimmerGammaConversions {
 
         recalculatedVertexParameters recalculatedVertex;
         Vtx_recalculation(pos, ele, &recalculatedVertex);
-
         v0photons(collision.globalIndex(), v0legs.lastIndex() + 1, v0legs.lastIndex() + 2,
                   v0.x(), v0.y(), v0.z(),
                   v0.pxpos(), v0.pypos(), v0.pzpos(),
@@ -544,6 +545,7 @@ struct skimmerGammaConversions {
 
     // TODO: This is still off and needs to be checked...
     recalculatedVertex->recalculatedConversionPoint[2] = (trackPosInformationCopy.getZ() * helixNeg.rC + trackNegInformationCopy.getZ() * helixPos.rC) / (helixPos.rC + helixNeg.rC);
+
     KFPTrack kFTrackPos = createKFPTrackFromTrackParCov(trackPosInformationCopy, lTrackPos.sign(), lTrackPos.tpcNClsFound(), lTrackPos.tpcChi2NCl());
     int pdg_ePlus = -11; // e+
     KFParticle kFParticleEPlus(kFTrackPos, pdg_ePlus);
