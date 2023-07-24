@@ -47,6 +47,8 @@ struct DGCandProducer {
   Produces<aod::UDTracksPID> outputTracksPID;
   Produces<aod::UDTracksExtra> outputTracksExtra;
   Produces<aod::UDTracksFlags> outputTracksFlag;
+  Produces<aod::UDFwdTracks> outputFwdTracks;
+  Produces<aod::UDFwdTracksExtra> outputFwdTracksExtra;
 
   // MC tables
   Produces<aod::UDMcCollisions> outputMcCollisions;
@@ -222,8 +224,23 @@ struct DGCandProducer {
                       track.detectorMap());
     outputTracksFlag(track.has_collision(),
                      track.isPVContributor());
-    LOGF(debug, "<DGCandProducer> %d %d  %d %f %f %f %f %f",
-         track.isPVContributor(), track.isQualityTrack(), track.isGlobalTrack(), track.px(), track.py(), track.pz(), track.pt(), track.p());
+  }
+
+  // function to update UDFwdTracks, UDFwdTracksExtra
+  template <typename TFwdTrack>
+  void updateUDFwdTrackTables(TFwdTrack const& fwdtrack, uint64_t const& bcnum)
+  {
+    outputFwdTracks(outputCollisions.lastIndex(),
+                    fwdtrack.px(), fwdtrack.py(), fwdtrack.pz(), fwdtrack.sign(),
+                    bcnum, fwdtrack.trackTime(), fwdtrack.trackTimeRes());
+    outputFwdTracksExtra(fwdtrack.nClusters(),
+                         fwdtrack.pDca(),
+                         fwdtrack.rAtAbsorberEnd(),
+                         fwdtrack.chi2(),
+                         fwdtrack.chi2MatchMCHMID(),
+                         fwdtrack.mchBitMap(),
+                         fwdtrack.midBitMap(),
+                         fwdtrack.midBoards());
   }
 
   // this function properly updates UDMcCollisions and UDMcParticles and returns the value
@@ -294,6 +311,7 @@ struct DGCandProducer {
   void processData(CC const& collision, BCs const& bcs, TCs& tracks, FWs& fwdtracks,
                    aod::Zdcs& zdcs, aod::FT0s& ft0s, aod::FV0As& fv0as, aod::FDDs& fdds)
   {
+    LOGF(debug, "<DGCandProducer>  collision %d", collision.globalIndex());
     // nominal BC
     if (!collision.has_foundBC()) {
       return;
@@ -332,19 +350,23 @@ struct DGCandProducer {
                            fitInfo.BBFDDApf, fitInfo.BBFDDCpf, fitInfo.BGFDDApf, fitInfo.BGFDDCpf);
       // fill UDZdcs
       if (bc.has_zdc()) {
-        LOGF(debug, "Found ZDC");
         auto zdc = bc.zdc();
-        std::vector<float> enes(zdc.energy()[0]);
-        std::vector<uint8_t> chEs(zdc.channelE()[0]);
-        std::vector<float> amps(zdc.amplitude()[0]);
-        std::vector<float> times(zdc.time()[0]);
-        std::vector<uint8_t> chTs(zdc.channelT()[0]);
+        auto enes = std::vector(zdc.energy().begin(), zdc.energy().end());
+        auto chEs = std::vector(zdc.channelE().begin(), zdc.channelE().end());
+        auto amps = std::vector(zdc.amplitude().begin(), zdc.amplitude().end());
+        auto times = std::vector(zdc.time().begin(), zdc.time().end());
+        auto chTs = std::vector(zdc.channelT().begin(), zdc.channelT().end());
         outputZdcs(outputCollisions.lastIndex(), enes, chEs, amps, times, chTs);
       }
 
       // update DGTracks tables
       for (auto& track : tracks) {
         updateUDTrackTables(track, bc.globalBC());
+      }
+
+      // update DGFwdTracks tables
+      for (auto& fwdtrack : fwdtracks) {
+        updateUDFwdTrackTables(fwdtrack, bc.globalBC());
       }
 
       // produce TPC signal histograms for 2-track events

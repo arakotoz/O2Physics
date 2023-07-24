@@ -551,6 +551,10 @@ void VarManager::SetDefaultVarNames()
   fgVariableUnits[kR3EP] = "";
   fgVariableNames[kPairMass] = "mass";
   fgVariableUnits[kPairMass] = "GeV/c2";
+  fgVariableNames[kPairMassDau] = "mass dilepton";
+  fgVariableUnits[kPairMassDau] = "GeV/c2";
+  fgVariableNames[kMassDau] = "mass HF";
+  fgVariableUnits[kMassDau] = "GeV/c2";
   fgVariableNames[kPairPt] = "p_{T}";
   fgVariableUnits[kPairPt] = "GeV/c";
   fgVariableNames[kPairEta] = "#eta";
@@ -567,6 +571,12 @@ void VarManager::SetDefaultVarNames()
   fgVariableUnits[kDeltaPhiSym] = "rad.";
   fgVariableNames[kCosThetaHE] = "cos#it{#theta}";
   fgVariableUnits[kCosThetaHE] = "";
+  fgVariableNames[kPhiHE] = "#varphi_{HE}";
+  fgVariableUnits[kPhiHE] = "rad.";
+  fgVariableNames[kCosThetaCS] = "cos#it{#theta}_{CS}";
+  fgVariableUnits[kCosThetaCS] = "";
+  fgVariableNames[kPhiCS] = "#varphi_{CS}";
+  fgVariableUnits[kPhiCS] = "rad.";
   fgVariableNames[kPsiPair] = "#Psi_{pair}";
   fgVariableUnits[kPsiPair] = "rad.";
   fgVariableNames[kDeltaPhiPair] = "#Delta#phi";

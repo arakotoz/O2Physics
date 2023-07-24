@@ -75,7 +75,7 @@ struct MultiplicityCounter {
   Preslice<aod::McParticles> perMCCol = aod::mcparticle::mcCollisionId;
   PresliceUnsorted<ReTracks> perColU = aod::track::bestCollisionId;
 
-  Service<O2DatabasePDG> pdg;
+  Service<o2::framework::O2DatabasePDG> pdg;
 
   Configurable<float> estimatorEta{"estimatorEta", 1.0, "eta range for INEL>0 sample definition"};
   Configurable<bool> useEvSel{"useEvSel", true, "use event selection"};
@@ -328,10 +328,10 @@ struct MultiplicityCounter {
   }
 
   expressions::Filter trackSelectionProper = ((aod::track::trackCutFlag & trackSelectionITS) == trackSelectionITS) &&
-                                             ifnode((aod::track::detectorMap & (uint8_t)o2::aod::track::TPC) == (uint8_t)o2::aod::track::TPC,
-                                                    (aod::track::trackCutFlag & trackSelectionTPC) == trackSelectionTPC,
+                                             ifnode(ncheckbit(aod::track::detectorMap, (uint8_t)o2::aod::track::TPC),
+                                                    ncheckbit(aod::track::trackCutFlag, trackSelectionTPC),
                                                     true) &&
-                                             ((aod::track::trackCutFlag & trackSelectionDCA) == trackSelectionDCA);
+                                             ncheckbit(aod::track::trackCutFlag, trackSelectionDCA);
 
   expressions::Filter atrackFilter = (aod::track::bestCollisionId >= 0) &&
                                      (nabs(aod::track::bestDCAZ) <= 2.f) &&

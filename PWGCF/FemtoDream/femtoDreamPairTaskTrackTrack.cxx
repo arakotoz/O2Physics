@@ -66,7 +66,7 @@ struct femtoDreamPairTaskTrackTrack {
   /// Particle 1
   Configurable<int> ConfPDGCodePartOne{"ConfPDGCodePartOne", 2212, "Particle 1 - PDG code"};
   Configurable<uint32_t> ConfCutPartOne{"ConfCutPartOne", 5542474, "Particle 1 - Selection bit from cutCulator"};
-  Configurable<std::vector<int>> ConfPIDPartOne{"ConfPIDPartOne", std::vector<int>{2}, "Particle 1 - Read from cutCulator"}; // we also need the possibility to specify whether the bit is true/false ->std>>vector<std::pair<int, int>>int>>
+  Configurable<int> ConfPIDPartOne{"ConfPIDPartOne", 2, "Particle 1 - Read from cutCulator"}; // we also need the possibility to specify whether the bit is true/false ->std>>vector<std::pair<int, int>>int>>
 
   /// Partition for particle 1
   Partition<aod::FDParticles> partsOne = (aod::femtodreamparticle::partType == uint8_t(aod::femtodreamparticle::ParticleType::kTrack)) && ((aod::femtodreamparticle::cut & ConfCutPartOne) == ConfCutPartOne);
@@ -79,7 +79,7 @@ struct femtoDreamPairTaskTrackTrack {
   Configurable<bool> ConfIsSame{"ConfIsSame", false, "Pairs of the same particle"};
   Configurable<int> ConfPDGCodePartTwo{"ConfPDGCodePartTwo", 2212, "Particle 2 - PDG code"};
   Configurable<uint32_t> ConfCutPartTwo{"ConfCutPartTwo", 5542474, "Particle 2 - Selection bit"};
-  Configurable<std::vector<int>> ConfPIDPartTwo{"ConfPIDPartTwo", std::vector<int>{2}, "Particle 2 - Read from cutCulator"}; // we also need the possibility to specify whether the bit is true/false ->std>>vector<std::pair<int, int>>
+  Configurable<int> ConfPIDPartTwo{"ConfPIDPartTwo", 2, "Particle 2 - Read from cutCulator"}; // we also need the possibility to specify whether the bit is true/false ->std>>vector<std::pair<int, int>>
 
   /// Partition for particle 2
   Partition<aod::FDParticles> partsTwo = (aod::femtodreamparticle::partType == uint8_t(aod::femtodreamparticle::ParticleType::kTrack)) &&
@@ -95,7 +95,7 @@ struct femtoDreamPairTaskTrackTrack {
   FemtoDreamEventHisto eventHisto;
 
   /// The configurables need to be passed to an std::vector
-  std::vector<int> vPIDPartOne, vPIDPartTwo;
+  int vPIDPartOne, vPIDPartTwo;
   std::vector<float> kNsigma;
 
   /// particle part
@@ -120,6 +120,7 @@ struct femtoDreamPairTaskTrackTrack {
   Configurable<bool> ConfCPRPlotPerRadii{"ConfCPRPlotPerRadii", false, "Plot CPR per radii"};
   Configurable<float> ConfCPRdeltaPhiMax{"ConfCPRdeltaPhiMax", 0.01, "Max. Delta Phi for Close Pair Rejection"};
   Configurable<float> ConfCPRdeltaEtaMax{"ConfCPRdeltaEtaMax", 0.01, "Max. Delta Eta for Close Pair Rejection"};
+  ConfigurableAxis ConfDummy{"ConfDummy", {1, 0, 1}, "Dummy axis"};
 
   FemtoDreamContainer<femtoDreamContainer::EventType::same, femtoDreamContainer::Observable::kstar> sameEventCont;
   FemtoDreamContainer<femtoDreamContainer::EventType::mixed, femtoDreamContainer::Observable::kstar> mixedEventCont;
@@ -132,10 +133,11 @@ struct femtoDreamPairTaskTrackTrack {
 
   void init(InitContext&)
   {
+
     eventHisto.init(&qaRegistry);
-    trackHistoPartOne.init(&qaRegistry, ConfTempFitVarpTBins, ConfTempFitVarBins, ConfIsMC, ConfPDGCodePartOne);
+    trackHistoPartOne.init(&qaRegistry, ConfTempFitVarpTBins, ConfTempFitVarBins, ConfDummy, ConfDummy, ConfDummy, ConfDummy, ConfIsMC, ConfPDGCodePartOne);
     if (!ConfIsSame) {
-      trackHistoPartTwo.init(&qaRegistry, ConfTempFitVarpTBins, ConfTempFitVarBins, ConfIsMC, ConfPDGCodePartTwo);
+      trackHistoPartTwo.init(&qaRegistry, ConfTempFitVarpTBins, ConfTempFitVarBins, ConfDummy, ConfDummy, ConfDummy, ConfDummy, ConfIsMC, ConfPDGCodePartTwo);
     }
 
     MixQaRegistry.add("MixingQA/hSECollisionBins", ";bin;Entries", kTH1F, {{120, -0.5, 119.5}});
@@ -150,9 +152,9 @@ struct femtoDreamPairTaskTrackTrack {
       pairCloseRejection.init(&resultRegistry, &qaRegistry, ConfCPRdeltaPhiMax.value, ConfCPRdeltaEtaMax.value, ConfCPRPlotPerRadii.value);
     }
 
-    vPIDPartOne = ConfPIDPartOne;
-    vPIDPartTwo = ConfPIDPartTwo;
-    kNsigma = ConfTrkPIDnSigmaMax;
+    vPIDPartOne = ConfPIDPartOne.value;
+    vPIDPartTwo = ConfPIDPartTwo.value;
+    kNsigma = ConfTrkPIDnSigmaMax.value;
   }
 
   template <typename CollisionType>
@@ -192,7 +194,7 @@ struct femtoDreamPairTaskTrackTrack {
         continue;
       }
 
-      trackHistoPartOne.fillQA<isMC, false>(part);
+      trackHistoPartOne.fillQA<isMC, false>(part, 0);
     }
 
     if (!ConfIsSame) {
@@ -210,7 +212,7 @@ struct femtoDreamPairTaskTrackTrack {
                                ConfCutTable->get("PartTwo", "nSigmaTPCTOF"))) {
           continue;
         }
-        trackHistoPartTwo.fillQA<isMC, false>(part);
+        trackHistoPartTwo.fillQA<isMC, false>(part, 0);
       }
     }
     /// Now build the combinations

@@ -116,7 +116,7 @@ struct collisionsInfo {
     std::vector<float> const lims{0.0, 0.0, 0.0, 0.0, 0.0}; // amplitude thresholds: FV0A, FT0A, FT0C, FDDA, FDDC
     auto isDGcandidate = true;
     for (auto& bc : bcSlice) {
-      if (!udhelpers::cleanFIT(bc, lims)) {
+      if (!udhelpers::cleanFIT(bc, 4., lims)) {
         isDGcandidate = false;
         break;
       }
@@ -147,7 +147,6 @@ struct collisionsInfo {
 
     // update histograms with track information
     LOGF(debug, "Number of tracks: Vertex %d, total %d, global %d", collision.numContrib(), cntAll, cntGlobal);
-    LOGF(debug, "Number of SPD cluster: %d", collision.spdClusters());
     registry.get<TH1>(HIST("numberTracks"))->Fill(cntAll);
     registry.get<TH1>(HIST("numberVtxTracks"))->Fill(collision.numContrib());
     registry.get<TH1>(HIST("numberGlobalTracks"))->Fill(cntGlobal);
