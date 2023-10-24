@@ -44,14 +44,15 @@
 #include "PWGLF/DataModel/LFStrangenessTables.h"
 
 #include "PWGHF/DataModel/CandidateReconstructionTables.h"
+#include "PWGHF/Utils/utilsAnalysis.h"
 #include "PWGHF/Utils/utilsBfieldCCDB.h"
 #include "PWGHF/Utils/utilsDebugLcToK0sP.h"
 
 using namespace o2;
+using namespace o2::analysis;
+using namespace o2::aod;
 using namespace o2::framework;
 using namespace o2::framework::expressions;
-using namespace o2::aod;
-using namespace o2::analysis::hf_cuts_single_track;
 
 // enum for candidate type
 enum CandidateType {
@@ -72,13 +73,6 @@ enum EventRejection {
   Chi2,
   NEventRejection
 };
-
-static const double massPi = RecoDecay::getMassPDG(kPiPlus);
-static const double massK = RecoDecay::getMassPDG(kKPlus);
-static const double massProton = RecoDecay::getMassPDG(kProton);
-static const double massElectron = RecoDecay::getMassPDG(kElectron);
-static const double massMuon = RecoDecay::getMassPDG(kMuonPlus);
-static const double massDzero = RecoDecay::getMassPDG(o2::analysis::pdg::kD0);
 
 // #define MY_DEBUG
 
@@ -275,17 +269,17 @@ struct HfTrackIndexSkimCreatorTagSelTracks {
   Configurable<std::vector<double>> binsPtTrack{"binsPtTrack", std::vector<double>{hf_cuts_single_track::vecBinsPtTrack}, "track pT bin limits for 2-prong DCA XY pT-dependent cut"};
   // 2-prong cuts
   Configurable<double> ptMinTrack2Prong{"ptMinTrack2Prong", -1., "min. track pT for 2 prong candidate"};
-  Configurable<LabeledArray<double>> cutsTrack2Prong{"cutsTrack2Prong", {hf_cuts_single_track::cutsTrack[0], nBinsPtTrack, nCutVarsTrack, labelsPtTrack, labelsCutVarTrack}, "Single-track selections per pT bin for 2-prong candidates"};
+  Configurable<LabeledArray<double>> cutsTrack2Prong{"cutsTrack2Prong", {hf_cuts_single_track::cutsTrack[0], hf_cuts_single_track::nBinsPtTrack, hf_cuts_single_track::nCutVarsTrack, hf_cuts_single_track::labelsPtTrack, hf_cuts_single_track::labelsCutVarTrack}, "Single-track selections per pT bin for 2-prong candidates"};
   Configurable<double> etaMinTrack2Prong{"etaMinTrack2Prong", -99999., "min. pseudorapidity for 2 prong candidate"};
   Configurable<double> etaMaxTrack2Prong{"etaMaxTrack2Prong", 4., "max. pseudorapidity for 2 prong candidate"};
   // 3-prong cuts
   Configurable<double> ptMinTrack3Prong{"ptMinTrack3Prong", -1., "min. track pT for 3 prong candidate"};
-  Configurable<LabeledArray<double>> cutsTrack3Prong{"cutsTrack3Prong", {hf_cuts_single_track::cutsTrack[0], nBinsPtTrack, nCutVarsTrack, labelsPtTrack, labelsCutVarTrack}, "Single-track selections per pT bin for 3-prong candidates"};
+  Configurable<LabeledArray<double>> cutsTrack3Prong{"cutsTrack3Prong", {hf_cuts_single_track::cutsTrack[0], hf_cuts_single_track::nBinsPtTrack, hf_cuts_single_track::nCutVarsTrack, hf_cuts_single_track::labelsPtTrack, hf_cuts_single_track::labelsCutVarTrack}, "Single-track selections per pT bin for 3-prong candidates"};
   Configurable<double> etaMinTrack3Prong{"etaMinTrack3Prong", -99999., "min. pseudorapidity for 3 prong candidate"};
   Configurable<double> etaMaxTrack3Prong{"etaMaxTrack3Prong", 4., "max. pseudorapidity for 3 prong candidate"};
   // bachelor cuts (when using cascades)
   Configurable<double> ptMinTrackBach{"ptMinTrackBach", 0.3, "min. track pT for bachelor in cascade candidate"}; // 0.5 for PbPb 2015?
-  Configurable<LabeledArray<double>> cutsTrackBach{"cutsTrackBach", {hf_cuts_single_track::cutsTrack[0], nBinsPtTrack, nCutVarsTrack, labelsPtTrack, labelsCutVarTrack}, "Single-track selections per pT bin for the bachelor of V0-bachelor candidates"};
+  Configurable<LabeledArray<double>> cutsTrackBach{"cutsTrackBach", {hf_cuts_single_track::cutsTrack[0], hf_cuts_single_track::nBinsPtTrack, hf_cuts_single_track::nCutVarsTrack, hf_cuts_single_track::labelsPtTrack, hf_cuts_single_track::labelsCutVarTrack}, "Single-track selections per pT bin for the bachelor of V0-bachelor candidates"};
   Configurable<double> etaMinTrackBach{"etaMinTrackBach", -99999., "min. pseudorapidity for bachelor in cascade candidate"};
   Configurable<double> etaMaxTrackBach{"etaMaxTrackBach", 0.8, "max. pseudorapidity for bachelor in cascade candidate"};
   // soft pion cuts for D*
@@ -293,7 +287,7 @@ struct HfTrackIndexSkimCreatorTagSelTracks {
   Configurable<double> ptMaxSoftPionForDstar{"ptMaxSoftPionForDstar", 2., "max. track pT for soft pion in D* candidate"};
   Configurable<double> etaMinSoftPionForDstar{"etaMinSoftPionForDstar", -99999., "min. pseudorapidity for soft pion in D* candidate"};
   Configurable<double> etaMaxSoftPionForDstar{"etaMaxSoftPionForDstar", 0.8, "max. pseudorapidity for soft pion in D* candidate"};
-  Configurable<LabeledArray<double>> cutsTrackDstar{"cutsTrackDstar", {hf_cuts_single_track::cutsTrackPrimary[0], nBinsPtTrack, nCutVarsTrack, labelsPtTrack, labelsCutVarTrack}, "Single-track selections per pT bin for the soft pion of D* candidates"};
+  Configurable<LabeledArray<double>> cutsTrackDstar{"cutsTrackDstar", {hf_cuts_single_track::cutsTrackPrimary[0], hf_cuts_single_track::nBinsPtTrack, hf_cuts_single_track::nCutVarsTrack, hf_cuts_single_track::labelsPtTrack, hf_cuts_single_track::labelsCutVarTrack}, "Single-track selections per pT bin for the soft pion of D* candidates"};
   Configurable<bool> useIsGlobalTrackForSoftPion{"useIsGlobalTrackForSoftPion", false, "check isGlobalTrack status for soft pion tracks"};
   Configurable<bool> useIsGlobalTrackWoDCAForSoftPion{"useIsGlobalTrackWoDCAForSoftPion", false, "check isGlobalTrackWoDCA status for soft pion tracks"};
   Configurable<bool> useIsQualityTrackITSForSoftPion{"useIsQualityTrackITSForSoftPion", true, "check qualityTracksITS status for soft pion tracks"};
@@ -987,6 +981,13 @@ struct HfTrackIndexSkimCreator {
   o2::base::Propagator::MatCorrType noMatCorr = o2::base::Propagator::MatCorrType::USEMatCorrNONE;
   int runNumber;
 
+  double massPi{0.};
+  double massK{0.};
+  double massProton{0.};
+  double massElectron{0.};
+  double massMuon{0.};
+  double massDzero{0.};
+
   // int nColls{0}; //can be added to run over limited collisions per file - for tesing purposes
 
   static constexpr int kN2ProngDecays = hf_cand_2prong::DecayType::N2ProngDecays; // number of 2-prong hadron types
@@ -1032,6 +1033,13 @@ struct HfTrackIndexSkimCreator {
     if (!doprocess2And3ProngsWithPvRefit && !doprocess2And3ProngsNoPvRefit) {
       return;
     }
+
+    massPi = o2::analysis::pdg::MassPiPlus;
+    massK = o2::analysis::pdg::MassKPlus;
+    massProton = o2::analysis::pdg::MassProton;
+    massElectron = o2::analysis::pdg::MassElectron;
+    massMuon = o2::analysis::pdg::MassMuonPlus;
+    massDzero = o2::analysis::pdg::MassD0;
 
     arrMass2Prong[hf_cand_2prong::DecayType::D0ToPiK] = std::array{std::array{massPi, massK},
                                                                    std::array{massK, massPi}};
@@ -1858,7 +1866,7 @@ struct HfTrackIndexSkimCreator {
                   registry.fill(HIST("hVtx2ProngX"), secondaryVertex2[0]);
                   registry.fill(HIST("hVtx2ProngY"), secondaryVertex2[1]);
                   registry.fill(HIST("hVtx2ProngZ"), secondaryVertex2[2]);
-                  std::array<array<float, 3>, 2> arrMom = {pvec0, pvec1};
+                  std::array<std::array<float, 3>, 2> arrMom = {pvec0, pvec1};
                   for (int iDecay2P = 0; iDecay2P < kN2ProngDecays; iDecay2P++) {
                     if (TESTBIT(isSelected2ProngCand, iDecay2P)) {
                       if (whichHypo2Prong[iDecay2P] == 1 || whichHypo2Prong[iDecay2P] == 3) {
@@ -2066,9 +2074,9 @@ struct HfTrackIndexSkimCreator {
               // get secondary vertex
               const auto& secondaryVertex3 = df3.getPCACandidate();
               // get track momenta
-              array<float, 3> pvec0;
-              array<float, 3> pvec1;
-              array<float, 3> pvec2;
+              std::array<float, 3> pvec0;
+              std::array<float, 3> pvec1;
+              std::array<float, 3> pvec2;
               df3.getTrack(0).getPxPyPzGlo(pvec0);
               df3.getTrack(1).getPxPyPzGlo(pvec1);
               df3.getTrack(2).getPxPyPzGlo(pvec2);
@@ -2106,7 +2114,7 @@ struct HfTrackIndexSkimCreator {
                 registry.fill(HIST("hVtx3ProngX"), secondaryVertex3[0]);
                 registry.fill(HIST("hVtx3ProngY"), secondaryVertex3[1]);
                 registry.fill(HIST("hVtx3ProngZ"), secondaryVertex3[2]);
-                std::array<array<float, 3>, 3> arr3Mom = {pvec0, pvec1, pvec2};
+                std::array<std::array<float, 3>, 3> arr3Mom = {pvec0, pvec1, pvec2};
                 for (int iDecay3P = 0; iDecay3P < kN3ProngDecays; iDecay3P++) {
                   if (TESTBIT(isSelected3ProngCand, iDecay3P)) {
                     if (whichHypo3Prong[iDecay3P] == 1 || whichHypo3Prong[iDecay3P] == 3) {
@@ -2317,9 +2325,9 @@ struct HfTrackIndexSkimCreator {
               // get secondary vertex
               const auto& secondaryVertex3 = df3.getPCACandidate();
               // get track momenta
-              array<float, 3> pvec0;
-              array<float, 3> pvec1;
-              array<float, 3> pvec2;
+              std::array<float, 3> pvec0;
+              std::array<float, 3> pvec1;
+              std::array<float, 3> pvec2;
               df3.getTrack(0).getPxPyPzGlo(pvec0);
               df3.getTrack(1).getPxPyPzGlo(pvec1);
               df3.getTrack(2).getPxPyPzGlo(pvec2);
@@ -2357,7 +2365,7 @@ struct HfTrackIndexSkimCreator {
                 registry.fill(HIST("hVtx3ProngX"), secondaryVertex3[0]);
                 registry.fill(HIST("hVtx3ProngY"), secondaryVertex3[1]);
                 registry.fill(HIST("hVtx3ProngZ"), secondaryVertex3[2]);
-                std::array<array<float, 3>, 3> arr3Mom = {pvec0, pvec1, pvec2};
+                std::array<std::array<float, 3>, 3> arr3Mom = {pvec0, pvec1, pvec2};
                 for (int iDecay3P = 0; iDecay3P < kN3ProngDecays; iDecay3P++) {
                   if (TESTBIT(isSelected3ProngCand, iDecay3P)) {
                     if (whichHypo3Prong[iDecay3P] == 1 || whichHypo3Prong[iDecay3P] == 3) {
@@ -2509,10 +2517,10 @@ struct HfTrackIndexSkimCreatorCascades {
   o2::base::Propagator::MatCorrType noMatCorr = o2::base::Propagator::MatCorrType::USEMatCorrNONE;
   int runNumber;
 
-  double massP = RecoDecay::getMassPDG(kProton);
-  double massK0s = RecoDecay::getMassPDG(kK0Short);
-  double massPi = RecoDecay::getMassPDG(kPiPlus);
-  double massLc = RecoDecay::getMassPDG(pdg::Code::kLambdaCPlus);
+  double massP{0.};
+  double massK0s{0.};
+  double massPi{0.};
+  double massLc{0.};
   double mass2K0sP{0.}; // WHY HERE?
 
   using SelectedCollisions = soa::Filtered<soa::Join<aod::Collisions, aod::HfSelCollision>>;
@@ -2537,6 +2545,11 @@ struct HfTrackIndexSkimCreatorCascades {
     if (etaMinV0Daugh == -99999.) {
       etaMinV0Daugh.value = -etaMaxV0Daugh;
     }
+
+    massP = o2::analysis::pdg::MassProton;
+    massK0s = o2::analysis::pdg::MassK0Short;
+    massPi = o2::analysis::pdg::MassPiPlus;
+    massLc = o2::analysis::pdg::MassLambdaCPlus;
 
     ccdb->setURL(ccdbUrl);
     ccdb->setCaching(true);
@@ -2817,21 +2830,28 @@ struct HfTrackIndexSkimCreatorLfCascades {
   std::array<std::array<std::array<double, 2>, 2>, kN2ProngDecays> arrMass2Prong;
   std::array<std::array<std::array<double, 3>, 2>, kN3ProngDecays> arrMass3Prong;
 
+  double massP{0.};
+  double massPi{0.};
+  double massXi{0.};
+  double massOmega{0.};
+  double massXiczero{0.};
+  double massXicplus{0.};
+
   // histograms
   HistogramRegistry registry{"registry"};
-
-  double massP = RecoDecay::getMassPDG(kProton);
-  double massPi = RecoDecay::getMassPDG(kPiPlus);
-  double massXi = RecoDecay::getMassPDG(kXiMinus);
-  double massOmega = RecoDecay::getMassPDG(kOmegaMinus);
-  double massXiczero = RecoDecay::getMassPDG(pdg::Code::kXiCZero);
-  double massXicplus = RecoDecay::getMassPDG(pdg::Code::kXiCPlus);
 
   void init(InitContext const&)
   {
     if (!doprocessLfCascades) {
       return;
     }
+
+    massP = o2::analysis::pdg::MassProton;
+    massPi = o2::analysis::pdg::MassPiPlus;
+    massXi = o2::analysis::pdg::MassXiMinus;
+    massOmega = o2::analysis::pdg::MassOmegaMinus;
+    massXiczero = o2::analysis::pdg::MassXiCZero;
+    massXicplus = o2::analysis::pdg::MassXiCPlus;
 
     arrMass2Prong[hf_cand_casc_lf_2prong::DecayType::XiczeroToXiPi] = std::array{std::array{massXi, massPi},
                                                                                  std::array{massPi, massXi}};
@@ -3147,7 +3167,7 @@ struct HfTrackIndexSkimCreatorLfCascades {
                 registry.fill(HIST("hVtx3ProngY"), secondaryVertex3[1]);
                 registry.fill(HIST("hVtx3ProngZ"), secondaryVertex3[2]);
 
-                std::array<array<float, 3>, 3> arr3Mom = {pVec1, pVec2, pVec3};
+                std::array<std::array<float, 3>, 3> arr3Mom = {pVec1, pVec2, pVec3};
                 for (int iDecay3P = 0; iDecay3P < kN3ProngDecays; iDecay3P++) {
                   auto mass3Prong = RecoDecay::m(arr3Mom, arrMass3Prong[iDecay3P][0]);
                   switch (iDecay3P) {
@@ -3182,7 +3202,7 @@ struct HfTrackIndexSkimCreatorLfCascades {
             registry.fill(HIST("hVtx2ProngY"), secondaryVertex2[1]);
             registry.fill(HIST("hVtx2ProngZ"), secondaryVertex2[2]);
 
-            std::array<array<float, 3>, 2> arrMom = {pVec1, pVec2};
+            std::array<std::array<float, 3>, 2> arrMom = {pVec1, pVec2};
             for (int iDecay2P = 0; iDecay2P < kN2ProngDecays; iDecay2P++) {
               auto mass2Prong = RecoDecay::m(arrMom, arrMass2Prong[iDecay2P][0]);
               switch (iDecay2P) {

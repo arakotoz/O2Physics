@@ -58,9 +58,6 @@ using namespace o2::aod::track;
 using namespace o2::aod;
 using namespace o2::aod::evsel;
 using namespace o2::analysis;
-using namespace o2::aod::hf_cand_2prong;
-using namespace o2::aod::hf_cand_bplus;
-using namespace o2::analysis::hf_cuts_bplus_to_d0_pi;
 
 using BCsRun3 = soa::Join<aod::BCs, aod::Timestamps, aod::BcSels, aod::Run3MatchedToBCSparse>;
 using MyCollisions = soa::Join<aod::Collisions, aod::EvSels>;
@@ -159,7 +156,7 @@ AxisSpec EvtClassAxis = {kECend - 1, kECbegin + 0.5, kECend - 0.5, "", "event cl
 AxisSpec TrigClassAxis = {kTrigend - 1, kTrigbegin + 0.5, kTrigend - 0.5, "", "trigger class"};
 AxisSpec ParticleTypeAxis = {kParTypeend - 1, kParTypebegin + 0.5, kParTypeend - 0.5, "", "Particle type"};
 std::vector<double> centBinningPbPb = {0, 1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 60, 70, 80, 100};
-std::vector<double> centBinning = {0., 0.01, 0.1, 1.0, 5.0, 10., 15., 20., 30., 40., 50., 70., 100.0};
+std::vector<double> centBinning = {0., 0.01, 0.1, 1.0, 5.0, 10., 15., 20., 25., 30., 35., 40., 45., 50., 70., 100.0};
 AxisSpec CentAxis = {centBinning, "", "centrality"};
 AxisSpec CentAxisPbPb = {centBinningPbPb, "", "centrality"};
 AxisSpec SpeciesAxis = {kSpeciesend - 1, kSpeciesbegin + 0.5, kSpeciesend - 0.5, "", "species class"};
@@ -216,7 +213,7 @@ struct MultiplicityCounter {
   {
     registry.add({"hetaresponse", ";etaresponse", {HistType::kTH2D, {{80, -4, 4}, {80, -4, 4}}}});
     registry.add({"hft0multiplicity", ";multiplicity", {HistType::kTH1D, {{20000, 0, 200000}}}});
-    registry.add({"hcentrality", IsPbPb ? " ; centrality_FT0C (%) " : "; centrality_FT0M", {HistType::kTH1F, {{100, 0, 100}}}});
+    registry.add({"hcentrality", IsPbPb ? " ; centrality_FT0C (%) " : "; centrality_FT0M", {HistType::kTH1F, {{1001, -0.05, 100.05}}}});
     registry.add({"hrecdndeta", "evntclass; triggerclass; zvtex, eta", {HistType::kTHnSparseD, {EvtClassAxis, TrigClassAxis, ZAxis, EtaAxis, IsPbPb ? CentAxisPbPb : CentAxis, ParticleTypeAxis, phibin}}});
     registry.add({"hreczvtx", "evntclass; triggerclass;  zvtex", {HistType::kTHnSparseD, {EvtClassAxis, TrigClassAxis, ZAxis, IsPbPb ? CentAxisPbPb : CentAxis}}});
     registry.add({"hphieta", "; #varphi; #eta; tracks", {HistType::kTHnSparseD, {EvtClassAxis, TrigClassAxis, PhiAxis, EtaAxis, IsPbPb ? CentAxisPbPb : CentAxis}}});
@@ -365,7 +362,7 @@ struct MultiplicityCounter {
           btrigc[kSel8g0] = true;
       }
 
-      auto cent = -1;
+      float cent = -1;
       if (IsPbPb) {
         if constexpr (C::template contains<aod::CentFT0Cs>())
           cent = collision.centFT0C();
@@ -493,7 +490,7 @@ struct MultiplicityCounter {
       Int_t pid = 0;
       for (auto& particle : particles) {
         auto p = pdg->GetParticle(particle.pdgCode());
-        if (std::abs(particle.pdgCode() == 310 && fabs(particle.eta()) < 0.5) && fabs(genz) < 10)
+        if (std::abs(particle.pdgCode()) == 310 && std::abs(particle.eta()) < 0.5 && std::abs(genz) < 10)
           registry.fill(HIST("Selection"), 17.);
         if (!particle.isPhysicalPrimary()) {
           continue;
