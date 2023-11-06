@@ -11,6 +11,9 @@
 
 cmake_minimum_required(VERSION 3.23 FATAL_ERROR)
 
+# see https://cmake.org/cmake/help/latest/policy/CMP0144.html
+cmake_policy(SET CMP0144 NEW)
+
 project(O2Physics
         VERSION 0.0.1
         LANGUAGES C CXX
