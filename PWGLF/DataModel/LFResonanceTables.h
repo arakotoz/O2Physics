@@ -26,6 +26,7 @@
 #include "PWGLF/DataModel/LFStrangenessTables.h"
 #include "Common/DataModel/TrackSelectionTables.h"
 #include "Framework/AnalysisDataModel.h"
+#include "Common/DataModel/Multiplicity.h"
 
 namespace o2::aod
 {
@@ -33,7 +34,6 @@ namespace o2::aod
 namespace resocollision
 {
 DECLARE_SOA_COLUMN(Cent, cent, float);             //! Centrality (Multiplicity) percentile (Default: FT0M)
-DECLARE_SOA_COLUMN(Mult, mult, int);               //! FT0 multiplicity
 DECLARE_SOA_COLUMN(Spherocity, spherocity, float); //! Spherocity of the event
 DECLARE_SOA_COLUMN(EvtPl, evtPl, float);           //! Second harmonic event plane
 DECLARE_SOA_COLUMN(EvtPlResAB, evtPlResAB, float); //! Second harmonic event plane resolution of A-B sub events
@@ -43,11 +43,11 @@ DECLARE_SOA_COLUMN(BMagField, bMagField, float);   //! Magnetic field
 } // namespace resocollision
 DECLARE_SOA_TABLE(ResoCollisions, "AOD", "RESOCOL",
                   o2::soa::Index<>,
+                  o2::aod::mult::MultNTracksPV,
                   collision::PosX,
                   collision::PosY,
                   collision::PosZ,
                   resocollision::Cent,
-                  resocollision::Mult,
                   resocollision::Spherocity,
                   resocollision::EvtPl,
                   resocollision::EvtPlResAB,
@@ -75,7 +75,9 @@ DECLARE_SOA_COLUMN(Indices, indices, int[2]);                        //! Field f
 DECLARE_SOA_COLUMN(CascadeIndices, cascIndices, int[3]);             //! Field for the track indices to remove auto-correlations (ordered: positive, negative, bachelor)
 DECLARE_SOA_COLUMN(Sign, sign, int8_t);                              //! Sign of the track charge
 DECLARE_SOA_COLUMN(TPCNClsCrossedRows, tpcNClsCrossedRows, uint8_t); //! Number of TPC crossed rows
+DECLARE_SOA_COLUMN(TPCNClsFound, tpcNClsFound, uint8_t);             //! Number of TPC clusters found
 DECLARE_SOA_COLUMN(IsGlobalTrackWoDCA, isGlobalTrackWoDCA, bool);    //! Is global track without DCA
+DECLARE_SOA_COLUMN(IsGlobalTrack, isGlobalTrack, bool);              //! Is global track
 DECLARE_SOA_COLUMN(IsPrimaryTrack, isPrimaryTrack, bool);            //! Is primary track
 DECLARE_SOA_COLUMN(IsPVContributor, isPVContributor, bool);          //! Is primary vertex contributor
 DECLARE_SOA_COLUMN(HasTOF, hasTOF, bool);                            //! Has TOF
@@ -118,6 +120,7 @@ DECLARE_SOA_TABLE(ResoTracks, "AOD", "RESOTRACKS",
                   resodaughter::Phi,
                   resodaughter::Sign,
                   resodaughter::TPCNClsCrossedRows,
+                  resodaughter::TPCNClsFound,
                   o2::aod::track::DcaXY,
                   o2::aod::track::DcaZ,
                   o2::aod::track::X,
@@ -133,6 +136,7 @@ DECLARE_SOA_TABLE(ResoTracks, "AOD", "RESOTRACKS",
                   o2::aod::track::PassedITSRefit,
                   o2::aod::track::PassedTPCRefit,
                   resodaughter::IsGlobalTrackWoDCA,
+                  resodaughter::IsGlobalTrack,
                   resodaughter::IsPrimaryTrack,
                   resodaughter::IsPVContributor,
                   resodaughter::TPCCrossedRowsOverFindableCls,
