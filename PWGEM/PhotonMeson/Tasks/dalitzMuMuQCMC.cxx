@@ -124,7 +124,7 @@ struct DalitzMuMuQCMC {
     LOGF(info, "Number of Dalitz cuts = %d", fDalitzMuMuCuts.size());
   }
 
-  void init(InitContext& context)
+  void init(InitContext&)
   {
     DefineCuts();
     addhistograms(); // please call this after DefineCuts();
@@ -155,13 +155,13 @@ struct DalitzMuMuQCMC {
 
   std::vector<uint64_t> used_trackIds;
 
-  void processQCMC(MyCollisions const& collisions, MyDalitzMuMus const& dileptons, MyMCTracks const& tracks, aod::EMMCParticles const& mcparticles, aod::EMMCEvents const&)
+  void processQCMC(MyCollisions const&, MyDalitzMuMus const&, MyMCTracks const&, aod::EMMCParticles const& mcparticles, aod::EMMCEvents const&)
   {
     THashList* list_ev_before = static_cast<THashList*>(fMainList->FindObject("Event")->FindObject(event_types[0].data()));
     THashList* list_ev_after = static_cast<THashList*>(fMainList->FindObject("Event")->FindObject(event_types[1].data()));
     THashList* list_dalitzmumu = static_cast<THashList*>(fMainList->FindObject("DalitzMuMu"));
     THashList* list_track = static_cast<THashList*>(fMainList->FindObject("Track"));
-    double values[4] = {0, 0, 0, 0};
+    double values[3] = {0, 0, 0};
     float dca_pos_3d = 999.f, dca_ele_3d = 999.f, dca_ee_3d = 999.f;
 
     for (auto& collision : grouped_collisions) {
@@ -203,7 +203,7 @@ struct DalitzMuMuQCMC {
           }
           if (mother_id > 0) {
             auto mcmother = mcparticles.iteratorAt(mother_id);
-            if (IsPhysicalPrimary(mcmother.emmcevent(), mcmother, mcparticles)) {
+            if (mcmother.isPhysicalPrimary() || mcmother.producedByGenerator()) {
               dca_pos_3d = pos.dca3DinSigma();
               dca_ele_3d = ele.dca3DinSigma();
               dca_ee_3d = std::sqrt((dca_pos_3d * dca_pos_3d + dca_ele_3d * dca_ele_3d) / 2.);
@@ -211,7 +211,6 @@ struct DalitzMuMuQCMC {
               values[0] = uls_pair.mass();
               values[1] = uls_pair.pt();
               values[2] = dca_ee_3d;
-              values[3] = uls_pair.phiv();
               reinterpret_cast<THnSparseF*>(list_dalitzmumu_cut->FindObject("hs_dilepton_uls_same"))->Fill(values);
 
               nuls++;
@@ -243,7 +242,7 @@ struct DalitzMuMuQCMC {
   Partition<aod::EMMCParticles> posTracks = o2::aod::mcparticle::pdgCode == -13; // mu+
   Partition<aod::EMMCParticles> negTracks = o2::aod::mcparticle::pdgCode == +13; // mu-
   PresliceUnsorted<aod::EMMCParticles> perMcCollision = aod::emmcparticle::emmceventId;
-  void processGen(MyCollisions const& collisions, aod::EMMCEvents const&, aod::EMMCParticles const& mcparticles)
+  void processGen(MyCollisions const&, aod::EMMCEvents const&, aod::EMMCParticles const& mcparticles)
   {
     // loop over mc stack and fill histograms for pure MC truth signals
     // all MC tracks which belong to the MC event corresponding to the current reconstructed event
@@ -293,7 +292,7 @@ struct DalitzMuMuQCMC {
           continue;
         }
         auto mcmother = mcparticles.iteratorAt(mother_id);
-        if (IsPhysicalPrimary(mcmother.emmcevent(), mcmother, mcparticles)) {
+        if (mcmother.isPhysicalPrimary() || mcmother.producedByGenerator()) {
           ROOT::Math::PtEtaPhiMVector v1(t1.pt(), t1.eta(), t1.phi(), o2::constants::physics::MassMuon);
           ROOT::Math::PtEtaPhiMVector v2(t2.pt(), t2.eta(), t2.phi(), o2::constants::physics::MassMuon);
           ROOT::Math::PtEtaPhiMVector v12 = v1 + v2;
@@ -304,7 +303,7 @@ struct DalitzMuMuQCMC {
   }
   PROCESS_SWITCH(DalitzMuMuQCMC, processGen, "run genrated info", true);
 
-  void processDummy(MyCollisions const& collisions) {}
+  void processDummy(MyCollisions const&) {}
   PROCESS_SWITCH(DalitzMuMuQCMC, processDummy, "Dummy function", false);
 };
 

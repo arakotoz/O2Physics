@@ -79,14 +79,18 @@ struct k892analysis {
   // Track selections
   Configurable<bool> cfgPrimaryTrack{"cfgPrimaryTrack", true, "Primary track selection"};                    // kGoldenChi2 | kDCAxy | kDCAz
   Configurable<bool> cfgGlobalWoDCATrack{"cfgGlobalWoDCATrack", true, "Global track selection without DCA"}; // kQualityTracks (kTrackType | kTPCNCls | kTPCCrossedRows | kTPCCrossedRowsOverNCls | kTPCChi2NDF | kTPCRefit | kITSNCls | kITSChi2NDF | kITSRefit | kITSHits) | kInAcceptanceTracks (kPtRange | kEtaRange)
-  Configurable<bool> cfgPVContributor{"cfgPVContributor", true, "PV contributor track selection"};           // PV Contriuibutor
+  Configurable<bool> cfgGlobalTrack{"cfgGlobalTrack", false, "Global track selection"};                      // kGoldenChi2 | kDCAxy | kDCAz
+  Configurable<bool> cfgPVContributor{"cfgPVContributor", false, "PV contributor track selection"};          // PV Contriuibutor
   Configurable<bool> additionalQAplots{"additionalQAplots", true, "Additional QA plots"};
   Configurable<bool> tof_at_high_pt{"tof_at_high_pt", false, "Use TOF at high pT"};
   Configurable<bool> additionalEvsel{"additionalEvsel", true, "Additional event selcection"};
-  Configurable<bool> manualtrkselcuts{"manualtrkselcuts", false, "Tracks selection cuts (nClusters)"};
   Configurable<int> cfgITScluster{"cfgITScluster", 0, "Number of ITS cluster"};
-  Configurable<int> cfgTPCcluster{"cfgTPCcluster", 70, "Number of TPC cluster"};
-  Configurable<float> cfgRCRFC{"cfgRCRFC", 0.8f, "Crossed Rows to Findable Clusters"};
+  Configurable<int> cfgTPCcluster{"cfgTPCcluster", 0, "Number of TPC cluster"};
+  Configurable<float> cfgRatioTPCRowsOverFindableCls{"cfgRatioTPCRowsOverFindableCls", 0.0f, "TPC Crossed Rows to Findable Clusters"};
+  Configurable<float> cfgITSChi2NCl{"cfgITSChi2NCl", 999.0, "ITS Chi2/NCl"};
+  Configurable<float> cfgTPCChi2NCl{"cfgTPCChi2NCl", 999.0, "TPC Chi2/NCl"};
+  Configurable<bool> cfgUseTPCRefit{"cfgUseTPCRefit", false, "Require TPC Refit"};
+  Configurable<bool> cfgUseITSRefit{"cfgUseITSRefit", false, "Require ITS Refit"};
 
   // Event selection cuts - Alex (Temporary, need to fix!)
   TF1* fMultPVCutLow = nullptr;
@@ -175,10 +179,10 @@ struct k892analysis {
       histos.add("QAMCTrue/trkDCAz_ka", "DCAz distribution of kaon track candidates", HistType::kTH1F, {dcazAxis});
       histos.add("h3Reck892invmass", "Invariant mass of Reconstructed MC K(892)0", kTH3F, {centAxis, ptAxis, invMassAxis});
       histos.add("h3Reck892invmassAnti", "Invariant mass of Reconstructed MC Anti-K(892)0", kTH3F, {centAxis, ptAxis, invMassAxis});
-      histos.add("k892Gen", "pT distribution of True MC K(892)0", kTH2F, {ptAxis, centAxis});
-      histos.add("k892GenAnti", "pT distribution of True MC Anti-K(892)0", kTH2F, {ptAxis, centAxis});
-      histos.add("k892Rec", "pT distribution of Reconstructed MC K(892)0", kTH2F, {ptAxis, centAxis});
-      histos.add("k892RecAnti", "pT distribution of Reconstructed MC Anti-K(892)0", kTH2F, {ptAxis, centAxis});
+      histos.add("k892Gen", "pT distribution of True MC K(892)0", kTH2D, {ptAxis, centAxis});
+      histos.add("k892GenAnti", "pT distribution of True MC Anti-K(892)0", kTH2D, {ptAxis, centAxis});
+      histos.add("k892Rec", "pT distribution of Reconstructed MC K(892)0", kTH2D, {ptAxis, centAxis});
+      histos.add("k892RecAnti", "pT distribution of Reconstructed MC Anti-K(892)0", kTH2D, {ptAxis, centAxis});
       histos.add("k892Recinvmass", "Inv mass distribution of Reconstructed MC Phi", kTH1F, {invMassAxis});
     }
     // Print output histograms statistics
@@ -233,17 +237,28 @@ struct k892analysis {
       return false;
     if (std::abs(track.dcaZ()) > cMaxDCAzToPVcut)
       return false;
+    if (track.itsNCls() < cfgITScluster)
+      return false;
+    if (track.tpcNClsFound() < cfgTPCcluster)
+      return false;
+    if (track.tpcCrossedRowsOverFindableCls() < cfgRatioTPCRowsOverFindableCls)
+      return false;
+    if (track.itsChi2NCl() >= cfgITSChi2NCl)
+      return false;
+    if (track.tpcChi2NCl() >= cfgTPCChi2NCl)
+      return false;
+    if (cfgUseITSRefit && !track.passedITSRefit())
+      return false;
+    if (cfgUseTPCRefit && !track.passedTPCRefit())
+      return false;
     if (cfgPVContributor && !track.isPVContributor())
       return false;
-    if (!manualtrkselcuts) {
-      if (cfgPrimaryTrack && !track.isPrimaryTrack())
-        return false;
-    } else if (manualtrkselcuts) {
-      if (!(track.isGlobalTrackWoDCA() &&
-            track.itsNCls() > cfgITScluster && track.tpcNClsFound() > cfgTPCcluster && track.tpcCrossedRowsOverFindableCls() > cfgRCRFC)) {
-        return false; // condition is like \bar{A.B} = \bar{A} + \bar{B} (+ is or, . is and)
-      }
-    }
+    if (cfgPrimaryTrack && !track.isPrimaryTrack())
+      return false;
+    if (cfgGlobalWoDCATrack && !track.isGlobalTrackWoDCA())
+      return false;
+    if (cfgGlobalTrack && !track.isGlobalTrack())
+      return false;
 
     return true;
   }
@@ -330,7 +345,7 @@ struct k892analysis {
     }
 
     TLorentzVector lDecayDaughter1, lDecayDaughter2, lResonance;
-    for (auto& [trk1, trk2] : combinations(CombinationsUpperIndexPolicy(dTracks1, dTracks2))) {
+    for (auto& [trk1, trk2] : combinations(CombinationsFullIndexPolicy(dTracks1, dTracks2))) {
 
       // Full index policy is needed to consider all possible combinations
       if (trk1.index() == trk2.index())
@@ -415,7 +430,7 @@ struct k892analysis {
       lDecayDaughter2.SetXYZM(trk2.px(), trk2.py(), trk2.pz(), massKa);
       lResonance = lDecayDaughter1 + lDecayDaughter2;
       // Rapidity cut
-      if (abs(lResonance.Rapidity()) > 0.5)
+      if (abs(lResonance.Rapidity()) >= 0.5)
         continue;
       //// Un-like sign pair only
       if (trk1.sign() * trk2.sign() < 0) {
@@ -448,7 +463,7 @@ struct k892analysis {
           histos.fill(HIST("QAMCTrue/trkDCAz_ka"), trk2.dcaZ());
 
           // MC histograms
-          if (trk1.motherPDG() > 0) {
+          if (trk1.motherPDG() < 0) {
             histos.fill(HIST("k892Rec"), lResonance.Pt(), multiplicity);
             histos.fill(HIST("k892Recinvmass"), lResonance.M());
             histos.fill(HIST("h3Reck892invmass"), multiplicity, lResonance.Pt(), lResonance.M());
@@ -493,7 +508,7 @@ struct k892analysis {
     for (auto& part : resoParents) {  // loop over all pre-filtered MC particles
       if (abs(part.pdgCode()) != 313) // K892(0)
         continue;
-      if (abs(part.y()) > 0.5) { // rapidity cut
+      if (abs(part.y()) >= 0.5) { // rapidity cut
         continue;
       }
       bool pass1 = false;

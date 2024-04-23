@@ -31,6 +31,7 @@ struct JetDerivedDataProducerDummyTask {
   Produces<aod::HfD0Pars> d0ParsTable;
   Produces<aod::HfD0ParEs> d0ParExtrasTable;
   Produces<aod::HfD0Sels> d0SelsTable;
+  Produces<aod::HfD0Mls> d0MlsTable;
   Produces<aod::HfD0Mcs> d0McsTable;
   Produces<aod::HfD0PBases> d0ParticlesTable;
 
@@ -39,6 +40,7 @@ struct JetDerivedDataProducerDummyTask {
   Produces<aod::Hf3PPars> LcParsTable;
   Produces<aod::Hf3PParEs> LcParExtrasTable;
   Produces<aod::Hf3PSels> LcSelsTable;
+  Produces<aod::Hf3PMls> LcMlsTable;
   Produces<aod::Hf3PMcs> LcMcsTable;
   Produces<aod::Hf3PPBases> LcParticlesTable;
 
@@ -46,7 +48,7 @@ struct JetDerivedDataProducerDummyTask {
   {
   }
 
-  void processDummy(aod::JDummys const& dummys)
+  void processDummy(aod::JDummys const&)
   {
   }
   PROCESS_SWITCH(JetDerivedDataProducerDummyTask, processDummy, "leaves all tables empty", true);

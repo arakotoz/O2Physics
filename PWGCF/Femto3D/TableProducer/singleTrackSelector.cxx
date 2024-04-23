@@ -58,6 +58,8 @@ struct singleTrackSelector {
   Configurable<std::vector<int>> _particlesToReject{"particlesToRejectPDGs", std::vector<int>{211, 321}, "PDG codes of particles that will be rejected with TOF (only pion, kaon, proton and deurton are supported now)"};
   Configurable<std::vector<float>> rejectWithinNsigmaTOF{"rejectWithinNsigmaTOF", std::vector<float>{-5.0f, 5.0f}, "TOF rejection Nsigma range for particles specified with PDG to be rejected"};
 
+  Configurable<float> _pRemoveTofOutOfRange{"pRemoveTofOutOfRange", 100.f, "momentum starting from which request TOF nSigma to be within the stored range (-10 < Nsigma < 10)"};
+
   Configurable<float> _min_P{"min_P", 0.f, "lower mometum limit"};
   Configurable<float> _max_P{"max_P", 100.f, "upper mometum limit"};
   Configurable<float> _eta{"eta", 100.f, "abs eta value limit"};
@@ -77,8 +79,9 @@ struct singleTrackSelector {
   using CollRun2 = soa::Join<aod::Collisions, aod::Mults, aod::EvSels, aod::CentRun2V0Ms>;
   using CollRun3 = soa::Join<aod::Collisions, aod::Mults, aod::EvSels, aod::CentFV0As, aod::CentFT0Ms, aod::CentFT0As, aod::CentFT0Cs, aod::CentFDDMs, aod::CentNTPVs>;
 
-  Produces<o2::aod::SingleTrackSels> tableRow;
   Produces<o2::aod::SingleCollSels> tableRowColl;
+  Produces<o2::aod::SingleCollExtras> tableRowCollExtra;
+  Produces<o2::aod::SingleTrackSels> tableRow;
   Produces<o2::aod::SingleTrkExtras> tableRowExtra;
   Produces<o2::aod::SingleTrkMCs> tableRowMC;
 
@@ -99,7 +102,7 @@ struct singleTrackSelector {
   std::vector<int> particlesToKeep;
   std::vector<int> particlesToReject;
 
-  void init(InitContext& context)
+  void init(InitContext&)
   {
 
     particlesToKeep = _particlesToKeep;
@@ -168,6 +171,8 @@ struct singleTrackSelector {
 
       for (auto ii : particlesToKeep)
         if (o2::aod::singletrackselector::TPCselection(track, std::make_pair(ii, keepWithinNsigmaTPC))) {
+          if (track.p() > _pRemoveTofOutOfRange && !o2::aod::singletrackselector::TOFselection(track, std::make_pair(ii, std::vector<float>{-10.0, 10.0}), 10.0))
+            continue;
 
           tableRow(tableRowColl.lastIndex(),
                    track.p(),
@@ -308,6 +313,10 @@ struct singleTrackSelector {
                    collision.posZ(),
                    d_bz);
 
+      tableRowCollExtra(collision.selection_bit(aod::evsel::kNoSameBunchPileup),
+                        collision.selection_bit(aod::evsel::kIsGoodZvtxFT0vsPV),
+                        collision.selection_bit(aod::evsel::kIsVertexITSTPC));
+
       fillTrackTables<false>(tracks);
     }
   }
@@ -400,6 +409,10 @@ struct singleTrackSelector {
                    centValue,
                    collision.posZ(),
                    d_bz);
+
+      tableRowCollExtra(collision.selection_bit(aod::evsel::kNoSameBunchPileup),
+                        collision.selection_bit(aod::evsel::kIsGoodZvtxFT0vsPV),
+                        collision.selection_bit(aod::evsel::kIsVertexITSTPC));
 
       fillTrackTables<true>(tracks);
     }
