@@ -57,7 +57,8 @@ using MyDalitzEE = MyDalitzEEs::iterator;
 
 struct TaggingPi0MC {
   using MyMCV0Legs = soa::Join<aod::V0Legs, aod::V0LegMCLabels>;
-  using MyMCTracks = soa::Join<aod::EMPrimaryElectrons, aod::EMPrimaryElectronMCLabels, aod::EMPrimaryElectronsPrefilterBit>;
+  using MyMCTracks = soa::Join<aod::EMPrimaryElectrons, aod::EMPrimaryElectronEMEventIds, aod::EMPrimaryElectronMCLabels, aod::EMPrimaryElectronsPrefilterBit>;
+  using MyMCTrack = MyMCTracks::iterator;
 
   Configurable<int> cfgCentEstimator{"cfgCentEstimator", 2, "FT0M:0, FT0A:1, FT0C:2"};
   Configurable<float> cfgCentMin{"cfgCentMin", 0, "min. centrality"};
@@ -379,7 +380,7 @@ struct TaggingPi0MC {
               continue;
             }
             reinterpret_cast<TH1F*>(list_pcm->FindObject(cut1.GetName())->FindObject("hPt_v0photon_Pi0_Primary"))->Fill(g1.pt());
-          } else if (IsFromWD(mcpi01.emmcevent(), mcpi01, mcparticles)) {
+          } else if (IsFromWD(mcpi01.emmcevent(), mcpi01, mcparticles) > 0) {
             reinterpret_cast<TH1F*>(list_pcm->FindObject(cut1.GetName())->FindObject("hPt_v0photon_Pi0_FromWD"))->Fill(g1.pt());
           } else {
             reinterpret_cast<TH1F*>(list_pcm->FindObject(cut1.GetName())->FindObject("hPt_v0photon_Pi0_hs"))->Fill(g1.pt());
@@ -392,7 +393,21 @@ struct TaggingPi0MC {
         for (auto& cut2 : cuts2) {
           for (auto& paircut : paircuts) {
             for (auto& [g1, g2] : combinations(CombinationsFullIndexPolicy(photons1_coll, photons2_coll))) {
-              if (!IsSelectedPair<pairtype>(g1, g2, cut1, cut2)) {
+
+              if constexpr (pairtype == PairType::kPCMDalitzEE) {
+                auto pos_pv = g2.template posTrack_as<MyMCTracks>();
+                auto ele_pv = g2.template negTrack_as<MyMCTracks>();
+                std::tuple<MyMCTrack, MyMCTrack, float> pair2 = std::make_tuple(pos_pv, ele_pv, collision.bz());
+                if (!IsSelectedPair<pairtype>(g1, pair2, cut1, cut2)) {
+                  continue;
+                }
+              } else {
+                if (!IsSelectedPair<pairtype>(g1, g2, cut1, cut2)) {
+                  continue;
+                }
+              }
+
+              if (!paircut.IsSelected(g1, g2)) {
                 continue;
               }
 

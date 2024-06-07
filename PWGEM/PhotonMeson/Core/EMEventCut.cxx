@@ -39,6 +39,13 @@ void EMEventCut::SetZvtxRange(float min, float max)
   LOG(info) << "EM Event Cut, set z vtx range: " << mMinZvtx << " - " << mMaxZvtx;
 }
 
+void EMEventCut::SetOccupancyRange(int min, int max)
+{
+  mMinOccupancy = min;
+  mMaxOccupancy = max;
+  LOG(info) << "EM Event Cut, set occupancy range: " << mMinOccupancy << " - " << mMaxOccupancy;
+}
+
 void EMEventCut::SetRequireNoTFB(bool flag)
 {
   mRequireNoTFB = flag;
@@ -63,7 +70,7 @@ void EMEventCut::SetRequireVertexITSTPC(bool flag)
   LOG(info) << "EM Event Cut, require vertex reconstructed by ITS-TPC matched track: " << mRequireVertexITSTPC;
 }
 
-void EMEventCut::SetRequireIsGoodZvtxFT0vsPV(bool flag)
+void EMEventCut::SetRequireGoodZvtxFT0vsPV(bool flag)
 {
   mRequireGoodZvtxFT0vsPV = flag;
   LOG(info) << "EM Event Cut, require good Zvtx between FT0 vs. PV: " << mRequireGoodZvtxFT0vsPV;

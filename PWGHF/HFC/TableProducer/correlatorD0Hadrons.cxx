@@ -184,9 +184,12 @@ struct HfCorrelatorD0Hadrons {
   Configurable<float> multMin{"multMin", 0., "minimum multiplicity accepted"};
   Configurable<float> multMax{"multMax", 10000., "maximum multiplicity accepted"};
   Configurable<float> ptSoftPionMax{"ptSoftPionMax", 3 * 800. * pow(10., -6.), "max. pT cut for soft pion identification"};
+  Configurable<bool> correlateD0WithLeadingParticle{"correlateD0WithLeadingParticle", false, "Switch for correlation of D0 mesons with leading particle only"};
+  Configurable<bool> storeAutoCorrelationFlag{"storeAutoCorrelationFlag", false, "Store flag that indicates if the track is paired to its D-meson mother instead of skipping it"};
 
   HfHelper hfHelper;
 
+  int leadingIndex = 0;
   double massD0{0.};
   double massPi{0.};
   double massK{0.};
@@ -264,6 +267,22 @@ struct HfCorrelatorD0Hadrons {
     registry.add("hCountD0TriggersGen", "D0 trigger particles - MC gen;;N of trigger D0", {HistType::kTH2F, {{1, -0.5, 0.5}, {vbins, "#it{p}_{T} (GeV/#it{c})"}}});
   }
 
+  // Find Leading Particle
+  template <typename TTracks>
+  int findLeadingParticle(TTracks const& tracks)
+  {
+    auto leadingParticle = tracks.begin();
+    for (auto const& track : tracks) {
+      if (std::abs(track.dcaXY()) >= 1. || std::abs(track.dcaZ()) >= 1.) {
+        continue;
+      }
+      if (track.pt() > leadingParticle.pt()) {
+        leadingParticle = track;
+      }
+    }
+    int leadingIndex = leadingParticle.globalIndex();
+    return leadingIndex;
+  }
   // =======  Process starts for Data, Same event ============
 
   /// D0-h correlation pair builder - for real data and data-like analysis (i.e. reco-level w/o matching request via MC truth)
@@ -275,6 +294,11 @@ struct HfCorrelatorD0Hadrons {
     if (selectedD0Candidates.size() == 0) {
       return;
     }
+    // find leading particle
+    if (correlateD0WithLeadingParticle) {
+      leadingIndex = findLeadingParticle(tracks);
+    }
+
     int poolBin = corrBinning.getBin(std::make_tuple(collision.posZ(), collision.multFV0M()));
     int nTracks = 0;
     if (collision.numContrib() > 1) {
@@ -344,8 +368,12 @@ struct HfCorrelatorD0Hadrons {
       for (const auto& track : tracks) {
         registry.fill(HIST("hTrackCounter"), 1); // fill total no. of tracks
         // Remove D0 daughters by checking track indices
+        bool correlationStatus = false;
         if ((candidate1.prong0Id() == track.globalIndex()) || (candidate1.prong1Id() == track.globalIndex())) {
-          continue;
+          if (!storeAutoCorrelationFlag) {
+            continue;
+          }
+          correlationStatus = true;
         }
         if (std::abs(track.dcaXY()) >= 1. || std::abs(track.dcaZ()) >= 1.)
           continue; // Remove secondary tracks
@@ -383,11 +411,18 @@ struct HfCorrelatorD0Hadrons {
           signalStatus += aod::hf_correlation_d0_hadron::ParticleTypeData::D0barOnly;
         }
 
+        if (correlateD0WithLeadingParticle) {
+          if (track.globalIndex() != leadingIndex) {
+            continue;
+          }
+          registry.fill(HIST("hTrackCounter"), 4); // fill no. of tracks  have leading particle
+        }
         entryD0HadronPair(getDeltaPhi(track.phi(), candidate1.phi()),
                           track.eta() - candidate1.eta(),
                           candidate1.pt(),
                           track.pt(),
-                          poolBin);
+                          poolBin,
+                          correlationStatus);
         entryD0HadronRecoInfo(hfHelper.invMassD0ToPiK(candidate1), hfHelper.invMassD0barToKPi(candidate1), signalStatus);
 
       } // end inner loop (tracks)
@@ -405,6 +440,10 @@ struct HfCorrelatorD0Hadrons {
     // protection against empty tables to be sliced
     if (selectedD0candidatesMc.size() == 0) {
       return;
+    }
+    // find leading particle
+    if (correlateD0WithLeadingParticle) {
+      leadingIndex = findLeadingParticle(tracks);
     }
     int poolBin = corrBinning.getBin(std::make_tuple(collision.posZ(), collision.multFV0M()));
     int nTracks = 0;
@@ -497,8 +536,12 @@ struct HfCorrelatorD0Hadrons {
           continue;
         }
         // Removing D0 daughters by checking track indices
+        bool correlationStatus = false;
         if ((candidate1.prong0Id() == track.globalIndex()) || (candidate1.prong1Id() == track.globalIndex())) {
-          continue;
+          if (!storeAutoCorrelationFlag) {
+            continue;
+          }
+          correlationStatus = true;
         }
         if (std::abs(track.dcaXY()) >= 1. || std::abs(track.dcaZ()) >= 1.) {
           continue; // Remove secondary tracks
@@ -529,6 +572,13 @@ struct HfCorrelatorD0Hadrons {
 
         registry.fill(HIST("hTrackCounterRec"), 3); // fill no. of tracks after soft pion removal
 
+        if (correlateD0WithLeadingParticle) {
+          if (track.globalIndex() != leadingIndex) {
+            continue;
+          }
+          registry.fill(HIST("hTrackCounter"), 4); // fill no. of tracks  have leading particle
+        }
+
         int signalStatus = 0;
         if (flagD0 && (candidate1.isSelD0() >= selectionFlagD0) && !isSoftPiD0) {
           SETBIT(signalStatus, aod::hf_correlation_d0_hadron::ParticleTypeMcRec::D0Sig);
@@ -554,7 +604,8 @@ struct HfCorrelatorD0Hadrons {
                           track.eta() - candidate1.eta(),
                           candidate1.pt(),
                           track.pt(),
-                          poolBin);
+                          poolBin,
+                          correlationStatus);
         entryD0HadronRecoInfo(hfHelper.invMassD0ToPiK(candidate1), hfHelper.invMassD0barToKPi(candidate1), signalStatus);
       } // end inner loop (Tracks)
     }   // end of outer loop (D0)
@@ -631,11 +682,13 @@ struct HfCorrelatorD0Hadrons {
         BinningTypeMcGen corrBinningMcGen{{getTracksSize}, {zBins, multBinsMcGen}, true};
         int poolBin = corrBinningMcGen.getBin(std::make_tuple(mcCollision.posZ(), getTracksSize(mcCollision)));
 
+        bool correlationStatus = false;
         entryD0HadronPair(getDeltaPhi(particle2.phi(), particle1.phi()),
                           particle2.eta() - particle1.eta(),
                           particle1.pt(),
                           particle2.pt(),
-                          poolBin);
+                          poolBin,
+                          correlationStatus);
         entryD0HadronRecoInfo(massD0, massD0, 0); // dummy info
       }                                           // end inner loop (Tracks)
     }                                             // end outer loop (D0)
@@ -698,8 +751,8 @@ struct HfCorrelatorD0Hadrons {
             signalStatus += aod::hf_correlation_d0_hadron::ParticleTypeData::D0barOnlySoftPi;
           }
         }
-
-        entryD0HadronPair(getDeltaPhi(t1.phi(), t2.phi()), t1.eta() - t2.eta(), t1.pt(), t2.pt(), poolBin);
+        bool correlationStatus = false;
+        entryD0HadronPair(getDeltaPhi(t1.phi(), t2.phi()), t1.eta() - t2.eta(), t1.pt(), t2.pt(), poolBin, correlationStatus);
         entryD0HadronRecoInfo(hfHelper.invMassD0ToPiK(t1), hfHelper.invMassD0barToKPi(t1), signalStatus);
       }
     }
@@ -798,9 +851,9 @@ struct HfCorrelatorD0Hadrons {
             SETBIT(signalStatus, aod::hf_correlation_d0_hadron::ParticleTypeMcRec::SoftPi);
           }
         } // background case D0bar
-
         registry.fill(HIST("hSignalStatusMERec"), signalStatus);
-        entryD0HadronPair(getDeltaPhi(t1.phi(), t2.phi()), t1.eta() - t2.eta(), t1.pt(), t2.pt(), poolBin);
+        bool correlationStatus = false;
+        entryD0HadronPair(getDeltaPhi(t1.phi(), t2.phi()), t1.eta() - t2.eta(), t1.pt(), t2.pt(), poolBin, correlationStatus);
         entryD0HadronRecoInfo(hfHelper.invMassD0ToPiK(t1), hfHelper.invMassD0barToKPi(t1), signalStatus);
       }
     }
@@ -862,7 +915,8 @@ struct HfCorrelatorD0Hadrons {
           continue;
         }
         int poolBin = corrBinningMcGen.getBin(std::make_tuple(c2.posZ(), getTracksSize(c2)));
-        entryD0HadronPair(getDeltaPhi(t2.phi(), t1.phi()), t2.eta() - t1.eta(), t1.pt(), t2.pt(), poolBin);
+        bool correlationStatus = false;
+        entryD0HadronPair(getDeltaPhi(t2.phi(), t1.phi()), t2.eta() - t1.eta(), t1.pt(), t2.pt(), poolBin, correlationStatus);
         entryD0HadronRecoInfo(massD0, massD0, 0); // dummy info
       }
     }

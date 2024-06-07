@@ -16,10 +16,11 @@
 #include "Framework/runDataProcessing.h"
 #include "Framework/AnalysisTask.h"
 #include "Framework/AnalysisDataModel.h"
+#include "Framework/O2DatabasePDGPlugin.h"
 #include "iostream"
 #include "PWGUD/DataModel/UDTables.h"
 #include "PWGUD/Core/SGSelector.h"
-#include "PWGUD/Tasks/SGTrackSelector.h"
+#include "PWGUD/Core/SGTrackSelector.h"
 //#include "Common/DataModel/PIDResponse.h"
 //#include "PWGUD/Core/RLhelper.h"
 #include <TString.h>
@@ -29,19 +30,46 @@ using namespace o2;
 using namespace o2::aod;
 using namespace o2::framework;
 using namespace o2::framework::expressions;
-#define mpion 0.1396
-#define mkaon 0.4937
-#define mproton 0.9383
+namespace excl_fs
+{
+DECLARE_SOA_COLUMN(GS, gs, int);
+DECLARE_SOA_COLUMN(PV, pv, int);
+DECLARE_SOA_COLUMN(ZA, za, int);
+DECLARE_SOA_COLUMN(ZC, zc, int);
+DECLARE_SOA_COLUMN(SIGN, sign, std::vector<int>);
+DECLARE_SOA_COLUMN(PX, px, std::vector<float>);
+DECLARE_SOA_COLUMN(PY, py, std::vector<float>);
+DECLARE_SOA_COLUMN(PZ, pz, std::vector<float>);
+DECLARE_SOA_COLUMN(ISELEC, iselec, std::vector<int>);
+DECLARE_SOA_COLUMN(ISMUON, ismuon, std::vector<int>);
+DECLARE_SOA_COLUMN(ISPION, ispion, std::vector<int>);
+DECLARE_SOA_COLUMN(ISKAON, iskaon, std::vector<int>);
+DECLARE_SOA_COLUMN(ISPROTON, isproton, std::vector<int>);
+} // namespace excl_fs
+namespace o2::aod
+{
+DECLARE_SOA_TABLE(Excl_fs, "AOD", "EXCL_FS",
+                  excl_fs::GS, excl_fs::PV, excl_fs::ZA, excl_fs::ZC, excl_fs::SIGN, excl_fs::PX, excl_fs::PY, excl_fs::PZ, excl_fs::ISELEC, excl_fs::ISMUON, excl_fs::ISPION, excl_fs::ISKAON, excl_fs::ISPROTON);
+}
 struct SGSpectraAnalyzer {
   SGSelector sgSelector;
+  Service<o2::framework::O2DatabasePDG> pdg;
   Configurable<float> FV0_cut{"FV0", 100., "FV0A threshold"};
   Configurable<float> FT0A_cut{"FT0A", 100., "FT0A threshold"};
   Configurable<float> FT0C_cut{"FT0C", 50., "FT0C threshold"};
   Configurable<float> FDDA_cut{"FDDA", 10000., "FDDA threshold"};
   Configurable<float> FDDC_cut{"FDDC", 10000., "FDDC threshold"};
   Configurable<float> ZDC_cut{"ZDC", 10., "ZDC threshold"};
-  Configurable<float> eta_cut{"Eta", 0.9, "Eta cut"};
   Configurable<bool> use_tof{"Use_TOF", true, "TOF PID"};
+  // Track Selections
+  Configurable<float> PV_cut{"PV_cut", 1.0, "Use Only PV tracks"};
+  Configurable<float> dcaZ_cut{"dcaZ_cut", 2.0, "dcaZ cut"};
+  Configurable<float> dcaXY_cut{"dcaXY_cut", 0.0, "dcaXY cut (0 for Pt-function)"};
+  Configurable<float> tpcChi2_cut{"tpcChi2_cut", 4, "Max tpcChi2NCl"};
+  Configurable<float> tpcNClsFindable_cut{"tpcNClsFindable_cut", 70, "Min tpcNClsFindable"};
+  Configurable<float> itsChi2_cut{"itsChi2_cut", 36, "Max itsChi2NCl"};
+  Configurable<float> eta_cut{"Eta", 0.9, "Eta cut"};
+  Configurable<float> pt_cut{"pt_cut", 0.1, "Track Pt"};
   HistogramRegistry registry{
     "registry",
     {// Pion histograms for each eta bin and gapSide
@@ -184,6 +212,9 @@ struct SGSpectraAnalyzer {
   */
   void process(UDCollisionFull const& collision, udtracksfull const& tracks)
   {
+    const float mpion = pdg->Mass(211);
+    const float mkaon = pdg->Mass(321);
+    const float mproton = pdg->Mass(2212);
     TLorentzVector a;
     TLorentzVector am;
     TLorentzVector sum;
@@ -192,7 +223,8 @@ struct SGSpectraAnalyzer {
     sum.SetXYZM(0, 0, 0, 0);
     int gapSide = collision.gapSide();
     float FIT_cut[5] = {FV0_cut, FT0A_cut, FT0C_cut, FDDA_cut, FDDC_cut};
-    int truegapSide = sgSelector.trueGap(collision, FIT_cut[0], FIT_cut[1], FIT_cut[3], ZDC_cut);
+    std::vector<float> parameters = {PV_cut, dcaZ_cut, dcaXY_cut, tpcChi2_cut, tpcNClsFindable_cut, itsChi2_cut, eta_cut, pt_cut};
+    int truegapSide = sgSelector.trueGap(collision, FIT_cut[0], FIT_cut[1], FIT_cut[2], ZDC_cut);
     gapSide = truegapSide;
     if (gapSide < 0 || gapSide > 2)
       return;
@@ -222,7 +254,7 @@ struct SGSpectraAnalyzer {
         registry.get<TH1>(HIST("DcaZ_PV"))->Fill(track.dcaZ());
         registry.get<TH1>(HIST("DcaXY_PV"))->Fill(track.dcaXY());
         alltracks++;
-        if (trackselector(track)) {
+        if (trackselector(track, parameters)) {
           int track_pid = trackpid(track, use_tof);
           // if (ispion(track, use_tof)) {
           if (track_pid <= 1) {
