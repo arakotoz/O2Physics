@@ -12,12 +12,12 @@
 /// \class to store minimal track info
 /// \author daiki.sekihata@cern.ch
 
-#ifndef PWGEM_PHOTONMESON_UTILS_EMTRACK_H_
-#define PWGEM_PHOTONMESON_UTILS_EMTRACK_H_
+#ifndef PWGEM_DILEPTON_UTILS_EMTRACK_H_
+#define PWGEM_DILEPTON_UTILS_EMTRACK_H_
 
 #include <vector>
 
-namespace o2::aod::pwgem::photonmeson::utils::emtrack
+namespace o2::aod::pwgem::dilepton::utils
 {
 class EMTrack
 {
@@ -34,6 +34,7 @@ class EMTrack
     fCharge = charge;
     fDCAxy = dcaXY;
     fDCAz = dcaZ;
+    fPairDCA3DinSigmaOTF = 0;
 
     fAmbEleSelfIds = amb_ele_self_ids;
     if (fAmbEleSelfIds.size() > 0) {
@@ -62,6 +63,9 @@ class EMTrack
   std::vector<int> ambiguousElectronsIds() const { return fAmbEleSelfIds; }
   float signed1Pt() const { return fCharge * 1.f / fPt; }
 
+  float pairDca3DinSigmaOTF() const { return fPairDCA3DinSigmaOTF; }
+  void setPairDca3DinSigmaOTF(float dca) { fPairDCA3DinSigmaOTF = dca; }
+
  protected:
   int fGlobalId;
   int fCollisionId;
@@ -73,6 +77,7 @@ class EMTrack
   int8_t fCharge;
   float fDCAxy;
   float fDCAz;
+  float fPairDCA3DinSigmaOTF;
   bool fIsAmbiguous;
   std::vector<int> fAmbEleSelfIds;
 };
@@ -133,6 +138,10 @@ class EMTrackWithCov : public EMTrack
   float c1PtTgl() const { return fC1PtTgl; }
   float c1Pt21Pt2() const { return fC1Pt21Pt2; }
 
+  void setCYY(float cYY) { fCYY = cYY; }
+  void setCZY(float cZY) { fCZY = cZY; }
+  void setCZZ(float cZZ) { fCZZ = cZZ; }
+
  protected:
   float fX;
   float fY;
@@ -157,5 +166,5 @@ class EMTrackWithCov : public EMTrack
   float fC1Pt21Pt2;
 };
 
-} // namespace o2::aod::pwgem::photonmeson::utils::emtrack
-#endif // PWGEM_PHOTONMESON_UTILS_EMTRACK_H_
+} // namespace o2::aod::pwgem::dilepton::utils
+#endif // PWGEM_DILEPTON_UTILS_EMTRACK_H_
