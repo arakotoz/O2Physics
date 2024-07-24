@@ -198,6 +198,7 @@ struct TableMaker {
   // CCDB connection configurables
   Configurable<string> fConfigCcdbUrl{"ccdb-url", "http://alice-ccdb.cern.ch", "url of the ccdb repository"};
   Configurable<string> fConfigCcdbPathTPC{"ccdb-path-tpc", "Users/z/zhxiong/TPCPID/PostCalib", "base path to the ccdb object"};
+  Configurable<string> fConfigCcdbPathZorro{"ccdb-path-zorro", "Users/r/rlietava/EventFiltering/OTS/", "base path to the ccdb object for zorro"};
   Configurable<int64_t> fConfigNoLaterThan{"ccdb-no-later-than", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count(), "latest acceptable timestamp of creation for the object"};
   Configurable<std::string> geoPath{"geoPath", "GLO/Config/GeometryAligned", "Path of the geometry file"};
   Configurable<std::string> grpmagPath{"grpmagPath", "GLO/Config/GRPMagField", "CCDB path of the GRPMagField object"};
@@ -215,7 +216,8 @@ struct TableMaker {
   Configurable<bool> fPropTrack{"cfgPropTrack", true, "Propgate tracks to associated collision to recalculate DCA and momentum vector"};
 
   // Muon related options
-  Configurable<bool> fPropMuon{"cfgPropMuon", true, "Propgate muon tracks through absorber (do not use if applying pairing)"};
+  Configurable<bool> fPropMuon{"cfgPropMuon", true, "Propagate muon tracks through absorber (do not use if applying pairing)"};
+  Configurable<bool> fRefitGlobalMuon{"cfgRefitGlobalMuon", true, "Correct global muon parameters"};
 
   Service<o2::ccdb::BasicCCDBManager> fCCDB;
 
@@ -519,6 +521,7 @@ struct TableMaker {
 
       if (fConfigRunZorro) {
         for (int i = 0; i < kNTriggersDQ; ++i) {
+          zorro.setBaseCCDBPath(fConfigCcdbPathZorro.value);
           zorro.initCCDB(fCCDB.service, fCurrentRun, bc.timestamp(), zorroTriggerMask[i]);
           if (!zorro.isSelected(bc.globalBC())) {
             tag |= static_cast<uint64_t>(1 << i);
@@ -763,7 +766,7 @@ struct TableMaker {
         VarManager::FillPropagateMuon<TMuonFillMap>(muon, collision);
       }
       // recalculte pDca and global muon kinematics
-      if (static_cast<int>(muon.trackType()) < 2) {
+      if (static_cast<int>(muon.trackType()) < 2 && fRefitGlobalMuon) {
         auto muontrack = muon.template matchMCHTrack_as<TMuons>();
         auto mfttrack = muon.template matchMFTTrack_as<MFTTracks>();
         VarManager::FillTrackCollision<TMuonFillMap>(muontrack, collision);
@@ -831,6 +834,19 @@ struct TableMaker {
         if (fMftIndexMap.find(muon.matchMFTTrackId()) != fMftIndexMap.end()) {
           mftIdx = fMftIndexMap[muon.matchMFTTrackId()];
         }
+      }
+      VarManager::FillTrack<TMuonFillMap>(muon);
+      if (fPropMuon) {
+        VarManager::FillPropagateMuon<TMuonFillMap>(muon, collision);
+      }
+      // recalculte pDca and global muon kinematics
+      if (static_cast<int>(muon.trackType()) < 2 && fRefitGlobalMuon) {
+        auto muontrack = muon.template matchMCHTrack_as<TMuons>();
+        auto mfttrack = muon.template matchMFTTrack_as<MFTTracks>();
+        VarManager::FillTrackCollision<TMuonFillMap>(muontrack, collision);
+        VarManager::FillGlobalMuonRefit<TMuonFillMap>(muontrack, mfttrack, collision);
+      } else {
+        VarManager::FillTrackCollision<TMuonFillMap>(muon, collision);
       }
       muonBasic(reducedEventIdx, mchIdx, mftIdx, fFwdTrackFilterMap[muon.globalIndex()], VarManager::fgValues[VarManager::kPt], VarManager::fgValues[VarManager::kEta], VarManager::fgValues[VarManager::kPhi], muon.sign(), 0);
       muonExtra(muon.nClusters(), VarManager::fgValues[VarManager::kMuonPDca], VarManager::fgValues[VarManager::kMuonRAtAbsorberEnd],

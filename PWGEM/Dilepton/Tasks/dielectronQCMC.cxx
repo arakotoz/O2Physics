@@ -69,9 +69,9 @@ struct dielectronQCMC {
   Configurable<int> cfgCentEstimator{"cfgCentEstimator", 2, "FT0M:0, FT0A:1, FT0C:2"};
   Configurable<float> cfgCentMin{"cfgCentMin", 0, "min. centrality"};
   Configurable<float> cfgCentMax{"cfgCentMax", 999.f, "max. centrality"};
-  Configurable<float> maxY{"maxY", 0.9, "maximum rapidity for reconstructed particles"};
+  Configurable<float> maxY{"maxY", 0.8, "maximum rapidity for reconstructed particles"};
 
-  ConfigurableAxis ConfMeeBins{"ConfMeeBins", {VARIABLE_WIDTH, 0.00, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19, 0.20, 0.21, 0.22, 0.23, 0.24, 0.25, 0.26, 0.27, 0.28, 0.29, 0.30, 0.31, 0.32, 0.33, 0.34, 0.35, 0.36, 0.37, 0.38, 0.39, 0.40, 0.41, 0.42, 0.43, 0.44, 0.45, 0.46, 0.47, 0.48, 0.49, 0.50, 0.51, 0.52, 0.53, 0.54, 0.55, 0.56, 0.57, 0.58, 0.59, 0.60, 0.61, 0.62, 0.63, 0.64, 0.65, 0.66, 0.67, 0.68, 0.69, 0.70, 0.71, 0.72, 0.73, 0.74, 0.75, 0.76, 0.77, 0.78, 0.79, 0.80, 0.81, 0.82, 0.83, 0.84, 0.85, 0.86, 0.87, 0.88, 0.89, 0.90, 0.91, 0.92, 0.93, 0.94, 0.95, 0.96, 0.97, 0.98, 0.99, 1.00, 1.01, 1.02, 1.03, 1.04, 1.05, 1.06, 1.07, 1.08, 1.09, 1.10, 1.20, 1.30, 1.40, 1.50, 1.60, 1.70, 1.80, 1.90, 2.00, 2.10, 2.20, 2.30, 2.40, 2.50, 2.60, 2.70, 2.75, 2.80, 2.85, 2.90, 2.95, 3.00, 3.05, 3.10, 3.15, 3.20, 3.30, 3.40, 3.50, 3.60, 3.70, 3.80, 3.90, 4.00}, "mee bins for output histograms"};
+  ConfigurableAxis ConfMeeBins{"ConfMeeBins", {VARIABLE_WIDTH, 0.00, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19, 0.20, 0.21, 0.22, 0.23, 0.24, 0.25, 0.26, 0.27, 0.28, 0.29, 0.30, 0.31, 0.32, 0.33, 0.34, 0.35, 0.36, 0.37, 0.38, 0.39, 0.40, 0.41, 0.42, 0.43, 0.44, 0.45, 0.46, 0.47, 0.48, 0.49, 0.50, 0.51, 0.52, 0.53, 0.54, 0.55, 0.56, 0.57, 0.58, 0.59, 0.60, 0.61, 0.62, 0.63, 0.64, 0.65, 0.66, 0.67, 0.68, 0.69, 0.70, 0.71, 0.72, 0.73, 0.74, 0.75, 0.76, 0.77, 0.78, 0.79, 0.80, 0.81, 0.82, 0.83, 0.84, 0.85, 0.86, 0.87, 0.88, 0.89, 0.90, 0.91, 0.92, 0.93, 0.94, 0.95, 0.96, 0.97, 0.98, 0.99, 1.00, 1.01, 1.02, 1.03, 1.04, 1.05, 1.06, 1.07, 1.08, 1.09, 1.10, 1.20, 1.30, 1.40, 1.50, 1.60, 1.70, 1.80, 1.90, 2.00, 2.10, 2.20, 2.30, 2.40, 2.50, 2.60, 2.70, 2.75, 2.80, 2.85, 2.90, 2.95, 3.00, 3.05, 3.10, 3.15, 3.20, 3.25, 3.30, 3.35, 3.40, 3.45, 3.50, 3.55, 3.60, 3.65, 3.70, 3.75, 3.80, 3.85, 3.90, 3.95, 4.00}, "mee bins for output histograms"};
   ConfigurableAxis ConfPteeBins{"ConfPteeBins", {VARIABLE_WIDTH, 0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00, 1.10, 1.20, 1.30, 1.40, 1.50, 1.60, 1.70, 1.80, 1.90, 2.00, 2.10, 2.20, 2.30, 2.40, 2.50, 2.60, 2.70, 2.80, 2.90, 3.00, 3.10, 3.20, 3.30, 3.40, 3.50, 3.60, 3.70, 3.80, 3.90, 4.00, 4.10, 4.20, 4.30, 4.40, 4.50, 4.60, 4.70, 4.80, 4.90, 5.00, 5.50, 6.00, 6.50, 7.00, 7.50, 8.00, 8.50, 9.00, 9.50, 10.00}, "pTee bins for output histograms"};
   ConfigurableAxis ConfDCAeeBins{"ConfDCAeeBins", {VARIABLE_WIDTH, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0}, "DCAee bins for output histograms"};
   // ConfigurableAxis ConfPCAeeBins{"ConfPCAeeBins", {VARIABLE_WIDTH, 0.0, 0.5, 1.0, 1.5, 2, 3, 4, 5}, "PCAee bins for output histograms in mm"};
@@ -162,7 +162,7 @@ struct dielectronQCMC {
   void addhistograms()
   {
     // event info
-    o2::aod::pwgem::dilepton::utils::eventhistogram::addEventHistograms(&fRegistry, cfgDoFlow);
+    o2::aod::pwgem::dilepton::utils::eventhistogram::addEventHistograms(&fRegistry);
 
     const AxisSpec axis_mass{ConfMeeBins, "m_{ee} (GeV/c^{2})"};
     const AxisSpec axis_pt{ConfPteeBins, "p_{T,ee} (GeV/c)"};
@@ -179,7 +179,7 @@ struct dielectronQCMC {
     const AxisSpec axis_dphi_e_ee{18, 0, M_PI, "#Delta#varphi = #varphi_{e} - #varphi_{ee} (rad.)"};                // for kUPC
 
     // generated info
-    fRegistry.add("Generated/sm/Pi0/hs", "m_{ee} vs. p_{T,ee} ULS", kTHnSparseF, {axis_mass, axis_pt, axis_dphi_ee, axis_cos_theta_cs, axis_phi_cs, axis_aco, axis_asym_pt, axis_dphi_e_ee}, true);
+    fRegistry.add("Generated/sm/Pi0/hs", "gen. dielectron signal", kTHnSparseF, {axis_mass, axis_pt, axis_dphi_ee, axis_cos_theta_cs, axis_phi_cs, axis_aco, axis_asym_pt, axis_dphi_e_ee}, true);
     fRegistry.addClone("Generated/sm/Pi0/", "Generated/sm/Eta/");
     fRegistry.addClone("Generated/sm/Pi0/", "Generated/sm/EtaPrime/");
     fRegistry.addClone("Generated/sm/Pi0/", "Generated/sm/Rho/");
@@ -196,7 +196,7 @@ struct dielectronQCMC {
     fRegistry.add("Generated/sm/Phi2ee/hPt", "pT of #phi meson", kTH1F, {axis_pt_meson}, true);
     fRegistry.add("Generated/sm/Phi2ee/hY", "rapidity of #phi meson", kTH1F, {axis_y_meson}, true);
 
-    fRegistry.add("Generated/ccbar/c2e_c2e/hadron_hadron/hs", "m_{ee} vs. p_{T,ee}", kTHnSparseF, {axis_mass, axis_pt, axis_dphi_ee, axis_cos_theta_cs, axis_phi_cs, axis_aco, axis_asym_pt, axis_dphi_e_ee}, true);
+    fRegistry.add("Generated/ccbar/c2e_c2e/hadron_hadron/hs", "generated dielectron signal", kTHnSparseF, {axis_mass, axis_pt, axis_dphi_ee, axis_cos_theta_cs, axis_phi_cs, axis_aco, axis_asym_pt, axis_dphi_e_ee}, true);
     fRegistry.addClone("Generated/ccbar/c2e_c2e/hadron_hadron/", "Generated/ccbar/c2e_c2e/meson_meson/");
     fRegistry.addClone("Generated/ccbar/c2e_c2e/hadron_hadron/", "Generated/ccbar/c2e_c2e/baryon_baryon/");
     fRegistry.addClone("Generated/ccbar/c2e_c2e/hadron_hadron/", "Generated/ccbar/c2e_c2e/meson_baryon/");
@@ -206,7 +206,7 @@ struct dielectronQCMC {
     fRegistry.addClone("Generated/ccbar/c2e_c2e/", "Generated/bbbar/b2c2e_b2e_diffb/"); // LS
 
     // reconstructed pair info
-    fRegistry.add("Pair/sm/Photon/hs", "hs pair", kTHnSparseF, {axis_mass, axis_pt, axis_dphi_ee, axis_cos_theta_cs, axis_phi_cs, axis_aco, axis_asym_pt, axis_dphi_e_ee, axis_dca}, true);
+    fRegistry.add("Pair/sm/Photon/hs", "rec. dielectron signal", kTHnSparseF, {axis_mass, axis_pt, axis_dphi_ee, axis_cos_theta_cs, axis_phi_cs, axis_aco, axis_asym_pt, axis_dphi_e_ee, axis_dca}, true);
     fRegistry.add("Pair/sm/Photon/hMvsPhiV", "m_{ee} vs. #varphi_{V};#varphi (rad.);m_{ee} (GeV/c^{2})", kTH2F, {{90, 0, M_PI}, {100, 0.0f, 0.1f}}, true);
     fRegistry.addClone("Pair/sm/Photon/", "Pair/sm/Pi0/");
     fRegistry.addClone("Pair/sm/Photon/", "Pair/sm/Eta/");
@@ -230,14 +230,20 @@ struct dielectronQCMC {
     fRegistry.addClone("Pair/ccbar/c2e_c2e/", "Pair/bbbar/b2c2e_b2e_sameb/");
     fRegistry.addClone("Pair/ccbar/c2e_c2e/", "Pair/bbbar/b2c2e_b2e_diffb/"); // LS
 
+    // for correlated bkg due to mis-identified hadrons, and true combinatorial bkg
+    fRegistry.add("Pair/corr_bkg_eh/uls/hs", "rec. bkg", kTHnSparseF, {axis_mass, axis_pt, axis_dphi_ee, axis_cos_theta_cs, axis_phi_cs, axis_aco, axis_asym_pt, axis_dphi_e_ee, axis_dca}, true);
+    fRegistry.addClone("Pair/corr_bkg_eh/uls/", "Pair/corr_bkg_eh/lspp/");
+    fRegistry.addClone("Pair/corr_bkg_eh/uls/", "Pair/corr_bkg_eh/lsmm/");
+    fRegistry.addClone("Pair/corr_bkg_eh/", "Pair/corr_bkg_hh/");
+    fRegistry.addClone("Pair/corr_bkg_eh/", "Pair/comb_bkg/");
+
     // track info
     fRegistry.add("Track/lf/hPt", "pT;p_{T} (GeV/c)", kTH1F, {{1000, 0.0f, 10}}, false);
     fRegistry.add("Track/lf/hQoverPt", "q/pT;q/p_{T} (GeV/c)^{-1}", kTH1F, {{400, -20, 20}}, false);
     fRegistry.add("Track/lf/hEtaPhi", "#eta vs. #varphi;#varphi (rad.);#eta", kTH2F, {{180, 0, 2 * M_PI}, {40, -2.0f, 2.0f}}, false);
     fRegistry.add("Track/lf/hDCAxyz", "DCA xy vs. z;DCA_{xy} (cm);DCA_{z} (cm)", kTH2F, {{200, -1.0f, 1.0f}, {200, -1.0f, 1.0f}}, false);
     fRegistry.add("Track/lf/hDCAxyzSigma", "DCA xy vs. z;DCA_{xy} (#sigma);DCA_{z} (#sigma)", kTH2F, {{200, -10.0f, 10.0f}, {200, -10.0f, 10.0f}}, false);
-    fRegistry.add("Track/lf/hDCAxy_Pt", "DCA_{xy} vs. pT;p_{T} (GeV/c);DCA_{xy} (cm)", kTH2F, {{1000, 0, 10}, {200, -1, 1}}, false);
-    fRegistry.add("Track/lf/hDCAz_Pt", "DCA_{z} vs. pT;p_{T} (GeV/c);DCA_{z} (cm)", kTH2F, {{1000, 0, 10}, {200, -1, 1}}, false);
+    fRegistry.add("Track/lf/hDCA3DSigma", "DCA 3D;DCA_{3D} (#sigma);", kTH1F, {{100, 0.0f, 10.0f}}, false);
     fRegistry.add("Track/lf/hDCAxyRes_Pt", "DCA_{xy} resolution vs. pT;p_{T} (GeV/c);DCA_{xy} resolution (#mum)", kTH2F, {{1000, 0, 10}, {500, 0., 500}}, false);
     fRegistry.add("Track/lf/hDCAzRes_Pt", "DCA_{z} resolution vs. pT;p_{T} (GeV/c);DCA_{z} resolution (#mum)", kTH2F, {{1000, 0, 10}, {500, 0., 500}}, false);
     fRegistry.add("Track/lf/hNclsTPC", "number of TPC clusters", kTH1F, {{161, -0.5, 160.5}}, false);
@@ -468,13 +474,13 @@ struct dielectronQCMC {
     // fill track info that belong to true pairs.
     if (std::find(used_trackIds.begin(), used_trackIds.end(), track.globalIndex()) == used_trackIds.end()) {
       auto mctrack = track.template emmcparticle_as<TMCParticles>();
+      float dca_3d = dca3DinSigma(track);
       fRegistry.fill(HIST("Track/") + HIST(ele_source_types[e_source_id]) + HIST("hPt"), track.pt());
       fRegistry.fill(HIST("Track/") + HIST(ele_source_types[e_source_id]) + HIST("hQoverPt"), track.sign() / track.pt());
       fRegistry.fill(HIST("Track/") + HIST(ele_source_types[e_source_id]) + HIST("hEtaPhi"), track.phi(), track.eta());
       fRegistry.fill(HIST("Track/") + HIST(ele_source_types[e_source_id]) + HIST("hDCAxyz"), track.dcaXY(), track.dcaZ());
       fRegistry.fill(HIST("Track/") + HIST(ele_source_types[e_source_id]) + HIST("hDCAxyzSigma"), track.dcaXY() / sqrt(track.cYY()), track.dcaZ() / sqrt(track.cZZ()));
-      fRegistry.fill(HIST("Track/") + HIST(ele_source_types[e_source_id]) + HIST("hDCAxy_Pt"), track.pt(), track.dcaXY());
-      fRegistry.fill(HIST("Track/") + HIST(ele_source_types[e_source_id]) + HIST("hDCAz_Pt"), track.pt(), track.dcaZ());
+      fRegistry.fill(HIST("Track/") + HIST(ele_source_types[e_source_id]) + HIST("hDCA3DSigma"), dca_3d);
       fRegistry.fill(HIST("Track/") + HIST(ele_source_types[e_source_id]) + HIST("hDCAxyRes_Pt"), track.pt(), sqrt(track.cYY()) * 1e+4); // convert cm to um
       fRegistry.fill(HIST("Track/") + HIST(ele_source_types[e_source_id]) + HIST("hDCAzRes_Pt"), track.pt(), sqrt(track.cZZ()) * 1e+4);  // convert cm to um
       fRegistry.fill(HIST("Track/") + HIST(ele_source_types[e_source_id]) + HIST("hNclsITS"), track.itsNCls());
@@ -526,20 +532,6 @@ struct dielectronQCMC {
     // float pca = 999.f, lxy = 999.f; // in unit of cm
     // o2::aod::pwgem::dilepton::utils::pairutil::isSVFound(fitter, collision, t1, t2, pca, lxy);
 
-    auto t1mc = t1.template emmcparticle_as<TMCParticles>();
-    auto t2mc = t2.template emmcparticle_as<TMCParticles>();
-    if (abs(t1mc.pdgCode()) != 11 || abs(t2mc.pdgCode()) != 11) {
-      return false;
-    }
-    if (t1mc.emmceventId() != t2mc.emmceventId()) {
-      return false;
-    }
-
-    int mother_id = FindLF(t1mc, t2mc, mcparticles);
-    int hfee_type = IsHF(t1mc, t2mc, mcparticles);
-    if (mother_id < 0 && hfee_type < 0) {
-      return false;
-    }
     ROOT::Math::PtEtaPhiMVector v1(t1.pt(), t1.eta(), t1.phi(), o2::constants::physics::MassElectron);
     ROOT::Math::PtEtaPhiMVector v2(t2.pt(), t2.eta(), t2.phi(), o2::constants::physics::MassElectron);
     ROOT::Math::PtEtaPhiMVector v12 = v1 + v2;
@@ -562,6 +554,52 @@ struct dielectronQCMC {
 
     float cos_thetaCS = 999, phiCS = 999.f;
     o2::aod::pwgem::dilepton::utils::pairutil::getAngleCS<false>(t1, t2, o2::constants::physics::MassElectron, o2::constants::physics::MassElectron, beamE1, beamE2, beamP1, beamP2, cos_thetaCS, phiCS);
+
+    auto t1mc = t1.template emmcparticle_as<TMCParticles>();
+    auto t2mc = t2.template emmcparticle_as<TMCParticles>();
+    bool is_from_same_mcevent = (t1mc.emmceventId() == t2mc.emmceventId()) && (collision.emmceventId() == t1mc.emmceventId()) && (collision.emmceventId() == t2mc.emmceventId());
+
+    if ((FindCommonMotherFrom2ProngsWithoutPDG(t1mc, t2mc) > 0 || IsHF(t1mc, t2mc, mcparticles) > 0) && is_from_same_mcevent) { // for bkg study
+      if (abs(t1mc.pdgCode()) != 11 || abs(t2mc.pdgCode()) != 11) {                                                             // hh or eh correlated bkg
+        if (abs(t1mc.pdgCode()) != 11 && abs(t2mc.pdgCode()) != 11) {                                                           // hh correlated bkg
+          if (t1.sign() * t2.sign() < 0) {                                                                                      // ULS
+            fRegistry.fill(HIST("Pair/corr_bkg_hh/uls/hs"), v12.M(), v12.Pt(), abs(dphi), abs(cos_thetaCS), abs(phiCS), aco, asym, abs(dphi_e_ee), dca_ee_3d);
+          } else if (t1.sign() > 0 && t2.sign() > 0) { // LS++
+            fRegistry.fill(HIST("Pair/corr_bkg_hh/lspp/hs"), v12.M(), v12.Pt(), abs(dphi), abs(cos_thetaCS), abs(phiCS), aco, asym, abs(dphi_e_ee), dca_ee_3d);
+          } else if (t1.sign() < 0 && t2.sign() < 0) { // LS--
+            fRegistry.fill(HIST("Pair/corr_bkg_hh/lsmm/hs"), v12.M(), v12.Pt(), abs(dphi), abs(cos_thetaCS), abs(phiCS), aco, asym, abs(dphi_e_ee), dca_ee_3d);
+          }
+        } else {                           // eh correlated bkg
+          if (t1.sign() * t2.sign() < 0) { // ULS
+            fRegistry.fill(HIST("Pair/corr_bkg_eh/uls/hs"), v12.M(), v12.Pt(), abs(dphi), abs(cos_thetaCS), abs(phiCS), aco, asym, abs(dphi_e_ee), dca_ee_3d);
+          } else if (t1.sign() > 0 && t2.sign() > 0) { // LS++
+            fRegistry.fill(HIST("Pair/corr_bkg_eh/lspp/hs"), v12.M(), v12.Pt(), abs(dphi), abs(cos_thetaCS), abs(phiCS), aco, asym, abs(dphi_e_ee), dca_ee_3d);
+          } else if (t1.sign() < 0 && t2.sign() < 0) { // LS--
+            fRegistry.fill(HIST("Pair/corr_bkg_eh/lsmm/hs"), v12.M(), v12.Pt(), abs(dphi), abs(cos_thetaCS), abs(phiCS), aco, asym, abs(dphi_e_ee), dca_ee_3d);
+          }
+        }
+      }
+    } else {                           // true combinatorial bkg
+      if (t1.sign() * t2.sign() < 0) { // ULS
+        fRegistry.fill(HIST("Pair/comb_bkg/uls/hs"), v12.M(), v12.Pt(), abs(dphi), abs(cos_thetaCS), abs(phiCS), aco, asym, abs(dphi_e_ee), dca_ee_3d);
+      } else if (t1.sign() > 0 && t2.sign() > 0) { // LS++
+        fRegistry.fill(HIST("Pair/comb_bkg/lspp/hs"), v12.M(), v12.Pt(), abs(dphi), abs(cos_thetaCS), abs(phiCS), aco, asym, abs(dphi_e_ee), dca_ee_3d);
+      } else if (t1.sign() < 0 && t2.sign() < 0) { // LS--
+        fRegistry.fill(HIST("Pair/comb_bkg/lsmm/hs"), v12.M(), v12.Pt(), abs(dphi), abs(cos_thetaCS), abs(phiCS), aco, asym, abs(dphi_e_ee), dca_ee_3d);
+      }
+    }
+
+    if (abs(t1mc.pdgCode()) != 11 || abs(t2mc.pdgCode()) != 11) {
+      return false;
+    }
+    if (!is_from_same_mcevent) {
+      return false;
+    }
+    int mother_id = FindLF(t1mc, t2mc, mcparticles);
+    int hfee_type = IsHF(t1mc, t2mc, mcparticles);
+    if (mother_id < 0 && hfee_type < 0) {
+      return false;
+    }
 
     if (mother_id > -1 && t1mc.pdgCode() * t2mc.pdgCode() < 0) {
       auto mcmother = mcparticles.iteratorAt(mother_id);
@@ -880,6 +918,8 @@ struct dielectronQCMC {
         ROOT::Math::PtEtaPhiMVector v2(t2.pt(), t2.eta(), t2.phi(), o2::constants::physics::MassElectron);
         ROOT::Math::PtEtaPhiMVector v12 = v1 + v2;
 
+        // LOGF(info, "t1.e() = %f, v1.E() = %f, t2.e() = %f, v2.E() = %f", t1.e(), v1.E(), t2.e(), v2.E());//OK
+
         if (abs(v12.Rapidity()) > maxY) {
           continue;
         }
@@ -913,13 +953,11 @@ struct dielectronQCMC {
                 break;
               case 223:
                 fRegistry.fill(HIST("Generated/sm/Omega/hs"), v12.M(), v12.Pt(), abs(dphi), abs(cos_thetaCS), abs(phiCS), aco, asym, abs(dphi_e_ee));
-                // LOGF(info, "mcmother.daughtersIds().size() = %d, v12.M() = %f, v12.Rapidity() = %f, mcmother.y() = %f, v12.Pt() = %f, mcmother.pt() = %f", mcmother.daughtersIds().size(), v12.M(), v12.Rapidity(), mcmother.y(), v12.Pt(), mcmother.pt());
-                // for (auto& daughterId : mcmother.daughtersIds()) {
-                //   auto daughter = mcparticles.iteratorAt(daughterId);
-                //   LOGF(info, "daughter.globalIndex() = %d, daughter.pdgCode() = %d", daughter.globalIndex(), daughter.pdgCode());
-                // }
                 if (mcmother.daughtersIds().size() == 2) { // omega->ee
                   fRegistry.fill(HIST("Generated/sm/Omega2ee/hs"), v12.M(), v12.Pt(), abs(dphi), abs(cos_thetaCS), abs(phiCS), aco, asym, abs(dphi_e_ee));
+                  // float mt = std::sqrt(std::pow(v12.M(), 2) + std::pow(v12.Pt(),2));
+                  // float cos_thetaCS_byhand =  2.f * (v1.E() * v2.Pz() - v2.E() * v1.Pz()) / (v12.M() * mt);
+                  // LOGF(info, "cos_thetaCS = %f, cos_thetaCS_byhand = %f", cos_thetaCS, cos_thetaCS_byhand);
                 }
                 break;
               case 333:
