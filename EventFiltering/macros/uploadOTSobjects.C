@@ -25,18 +25,11 @@
 #include "TTree.h"
 
 #include "CCDB/BasicCCDBManager.h"
-
-const std::string kBaseCCDBPath = "Users/m/mpuccio/EventFiltering/OTS/";
-
-#pragma link C++ class std::vector < std::array < uint64_t, 2>> + ;
-struct bcInfo {
-  bcInfo() = default;
-  ULong64_t bcAOD, bcEvSel, trigMask[2], selMask[2];
-  void print() const;
-};
+#include "EventFiltering/ZorroHelper.h"
 
 void uploadOTSobjects(std::string inputList, std::string passName, bool useAlien)
 {
+  const std::string kBaseCCDBPath = "Users/m/mpuccio/EventFiltering/OTS/";
   std::string baseCCDBpath = passName.empty() ? kBaseCCDBPath : kBaseCCDBPath + passName + "/";
   if (useAlien) {
     TGrid::Connect("alien://");
@@ -59,21 +52,21 @@ void uploadOTSobjects(std::string inputList, std::string passName, bool useAlien
     std::cout << ">>> Begin - end timestamps for the upload: " << duration.first << " - " << duration.second << std::endl;
     path = useAlien ? "alien://" + path : path;
     std::unique_ptr<TFile> scalersFile{TFile::Open((path + "/AnalysisResults_fullrun.root").data(), "READ")};
-    TH1* scalers = (TH1*)scalersFile->Get("central-event-filter-task/scalers/mScalers");
-    TH1* filters = (TH1*)scalersFile->Get("central-event-filter-task/scalers/mFiltered");
+    TH1* scalers = static_cast<TH1*>(scalersFile->Get("central-event-filter-task/scalers/mScalers"));
+    TH1* filters = static_cast<TH1*>(scalersFile->Get("central-event-filter-task/scalers/mFiltered"));
     api.storeAsTFile(scalers, baseCCDBpath + "FilterCounters", metadata, duration.first, duration.second);
     api.storeAsTFile(filters, baseCCDBpath + "SelectionCounters", metadata, duration.first, duration.second);
-    TH1* hCounterTVX = (TH1*)scalersFile->Get("bc-selection-task/hCounterTVX");
+    TH1* hCounterTVX = static_cast<TH1*>(scalersFile->Get("bc-selection-task/hCounterTVX"));
     api.storeAsTFile(hCounterTVX, baseCCDBpath + "InspectedTVX", metadata, duration.first, duration.second);
 
-    std::vector<std::array<uint64_t, 2>> bcRanges, filterBitMask, selectionBitMask;
+    std::vector<ZorroHelper> zorroHelpers;
     std::unique_ptr<TFile> bcRangesFile{TFile::Open((path + "/bcRanges_fullrun.root").data(), "READ")};
     int Nmax = 0;
     for (auto key : *(bcRangesFile->GetListOfKeys())) {
-      TTree* cefpTree = (TTree*)bcRangesFile->Get(Form("%s/selectedBC", key->GetName()));
+      TTree* cefpTree = static_cast<TTree*>(bcRangesFile->Get(Form("%s/selectedBC", key->GetName())));
       if (!cefpTree)
         continue;
-      bcInfo bci;
+      ZorroHelper bci;
       cefpTree->SetBranchAddress("bcAO2D", &bci.bcAOD);
       cefpTree->SetBranchAddress("bcEvSel", &bci.bcEvSel);
       if (cefpTree->GetBranch("selMask") && cefpTree->GetBranch("triMask")) {
@@ -88,15 +81,11 @@ void uploadOTSobjects(std::string inputList, std::string passName, bool useAlien
       for (int i = 0; i < cefpTree->GetEntries(); i++) {
         if ((i < Nmax) || (Nmax == 0)) {
           cefpTree->GetEntry(i);
-          bcRanges.push_back({bci.bcAOD, bci.bcEvSel});
-          filterBitMask.push_back({bci.trigMask[0], bci.trigMask[1]});
-          selectionBitMask.push_back({bci.selMask[0], bci.selMask[1]});
+          zorroHelpers.push_back(bci);
         }
       }
     }
-    api.storeAsTFileAny(&bcRanges, baseCCDBpath + "SelectedBCs", metadata, duration.first, duration.second);
-    api.storeAsTFileAny(&filterBitMask, baseCCDBpath + "FilterBitMasks", metadata, duration.first, duration.second);
-    api.storeAsTFileAny(&selectionBitMask, baseCCDBpath + "SelectionBitMasks", metadata, duration.first, duration.second);
+    api.storeAsTFileAny(&zorroHelpers, baseCCDBpath + "ZorroHelpers", metadata, duration.first, duration.second);
   }
 }
 
