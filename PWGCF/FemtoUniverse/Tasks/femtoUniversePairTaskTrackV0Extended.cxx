@@ -135,11 +135,6 @@ struct femtoUniversePairTaskTrackV0Extended {
   ConfigurableAxis ConfmTBins3D{"ConfmTBins3D", {VARIABLE_WIDTH, 1.02f, 1.14f, 1.20f, 1.26f, 1.38f, 1.56f, 1.86f, 4.50f}, "mT Binning for the 3Dimensional plot: k* vs multiplicity vs mT (set <<ConfUse3D>> to true in order to use)"};
   ConfigurableAxis ConfmultBins3D{"ConfMultBins3D", {VARIABLE_WIDTH, 0.0f, 20.0f, 30.0f, 40.0f, 99999.0f}, "multiplicity Binning for the 3Dimensional plot: k* vs multiplicity vs mT (set <<ConfUse3D>> to true in order to use)"};
 
-  /// MC
-
-  Configurable<float> ConfHPtMC{"ConfHPtMC", 4.0f, "higher limit for pt"};
-  Configurable<float> ConfLPtMC{"ConfLPtMC", 0.3f, "lower limit for pt"};
-
   // Efficiency
   Configurable<std::string> ConfLocalEfficiency{"ConfLocalEfficiency", "", "Local path to efficiency .root file"};
 
@@ -416,69 +411,45 @@ struct femtoUniversePairTaskTrackV0Extended {
       }
     }
 
+    auto pairProcessFunc = [&](auto& p1, auto& p2) -> void {
+      // Lambda invariant mass cut for p1
+      if (!invMLambda(p1.mLambda(), p1.mAntiLambda()))
+        return;
+      // Lambda invariant mass cut for p2
+      if (!invMLambda(p2.mLambda(), p2.mAntiLambda()))
+        return;
+      // track cleaning
+      if (!pairCleanerV0.isCleanPair(p1, p2, parts)) {
+        return;
+      }
+      if (ConfIsCPR.value) {
+        if (pairCloseRejectionV0.isClosePair(p1, p2, parts, magFieldTesla, femtoUniverseContainer::EventType::same)) {
+          return;
+        }
+      }
+      const auto& posChild1 = parts.iteratorAt(p1.index() - 2);
+      const auto& negChild1 = parts.iteratorAt(p1.index() - 1);
+      /// Daughters that do not pass this condition are not selected
+      if (!IsParticleTPC(posChild1, V0ChildTable[ConfV0Type1][0]) || !IsParticleTPC(negChild1, V0ChildTable[ConfV0Type1][1]))
+        return;
+
+      const auto& posChild2 = parts.iteratorAt(p2.index() - 2);
+      const auto& negChild2 = parts.iteratorAt(p2.index() - 1);
+      /// Daughters that do not pass this condition are not selected
+      if (!IsParticleTPC(posChild2, V0ChildTable[ConfV0Type2][0]) || !IsParticleTPC(negChild2, V0ChildTable[ConfV0Type2][1]))
+        return;
+
+      sameEventCont.setPair<false>(p1, p2, multCol, ConfUse3D);
+    };
     if (ConfV0Type1 == ConfV0Type2) {
       /// Now build the combinations for identical V0s
       for (auto& [p1, p2] : combinations(CombinationsStrictlyUpperIndexPolicy(groupPartsTwo, groupPartsTwo))) {
-        // Lambda invariant mass cut for p1
-        if (!invMLambda(p1.mLambda(), p1.mAntiLambda()))
-          continue;
-        // Lambda invariant mass cut for p2
-        if (!invMLambda(p2.mLambda(), p2.mAntiLambda()))
-          continue;
-        // track cleaning
-        if (!pairCleanerV0.isCleanPair(p1, p2, parts)) {
-          continue;
-        }
-        if (ConfIsCPR.value) {
-          if (pairCloseRejectionV0.isClosePair(p1, p2, parts, magFieldTesla, femtoUniverseContainer::EventType::same)) {
-            continue;
-          }
-        }
-        const auto& posChild1 = parts.iteratorAt(p1.index() - 2);
-        const auto& negChild1 = parts.iteratorAt(p1.index() - 1);
-        /// Daughters that do not pass this condition are not selected
-        if (!IsParticleTPC(posChild1, V0ChildTable[ConfV0Type1][0]) || !IsParticleTPC(negChild1, V0ChildTable[ConfV0Type1][1]))
-          continue;
-
-        const auto& posChild2 = parts.iteratorAt(p2.index() - 2);
-        const auto& negChild2 = parts.iteratorAt(p2.index() - 1);
-        /// Daughters that do not pass this condition are not selected
-        if (!IsParticleTPC(posChild2, V0ChildTable[ConfV0Type2][0]) || !IsParticleTPC(negChild2, V0ChildTable[ConfV0Type2][1]))
-          continue;
-
-        sameEventCont.setPair<false>(p1, p2, multCol, ConfUse3D);
+        pairProcessFunc(p1, p2);
       }
     } else {
       /// Now build the combinations for not identical identical V0s
       for (auto& [p1, p2] : combinations(CombinationsFullIndexPolicy(groupPartsTwo, groupPartsTwo))) {
-        // Lambda invariant mass cut for p1
-        if (!invMLambda(p1.mLambda(), p1.mAntiLambda()))
-          continue;
-        // Lambda invariant mass cut for p2
-        if (!invMLambda(p2.mLambda(), p2.mAntiLambda()))
-          continue;
-        // track cleaning
-        if (!pairCleanerV0.isCleanPair(p1, p2, parts)) {
-          continue;
-        }
-        if (ConfIsCPR.value) {
-          if (pairCloseRejectionV0.isClosePair(p1, p2, parts, magFieldTesla, femtoUniverseContainer::EventType::same)) {
-            continue;
-          }
-        }
-        const auto& posChild1 = parts.iteratorAt(p1.index() - 2);
-        const auto& negChild1 = parts.iteratorAt(p1.index() - 1);
-        /// Daughters that do not pass this condition are not selected
-        if (!IsParticleTPC(posChild1, V0ChildTable[ConfV0Type1][0]) || !IsParticleTPC(negChild1, V0ChildTable[ConfV0Type1][1]))
-          continue;
-
-        const auto& posChild2 = parts.iteratorAt(p2.index() - 2);
-        const auto& negChild2 = parts.iteratorAt(p2.index() - 1);
-        /// Daughters that do not pass this condition are not selected
-        if (!IsParticleTPC(posChild2, V0ChildTable[ConfV0Type2][0]) || !IsParticleTPC(negChild2, V0ChildTable[ConfV0Type2][1]))
-          continue;
-
-        sameEventCont.setPair<false>(p1, p2, multCol, ConfUse3D);
+        pairProcessFunc(p1, p2);
       }
     }
   }
