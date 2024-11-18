@@ -18,6 +18,7 @@
 ///
 
 // O2 includes
+#include <string>
 #include "ReconstructionDataFormats/Track.h"
 #include "Framework/runDataProcessing.h"
 #include "Framework/AnalysisTask.h"
@@ -38,7 +39,6 @@
 #include "PWGLF/DataModel/mcCentrality.h"
 #include "Common/Core/RecoDecay.h"
 #include "TPDGCode.h"
-
 using namespace o2;
 using namespace o2::track;
 using namespace o2::framework;
@@ -131,6 +131,7 @@ struct tofSpectra {
   Configurable<bool> enableTPCTOFvsEtaHistograms{"enableTPCTOFvsEtaHistograms", false, "choose if produce TPC tof vs Eta"};
   Configurable<bool> includeCentralityMC{"includeCentralityMC", true, "choose if include Centrality to MC"};
   Configurable<bool> enableTPCTOFVsMult{"enableTPCTOFVsMult", false, "Produce TPC-TOF plots vs multiplicity"};
+  Configurable<bool> includeCentralityToTracks{"includeCentralityToTracks", false, "choose if include Centrality to tracks"};
 
   // Histograms
   HistogramRegistry histos{"Histos", {}, OutputObjHandlingPolicy::AnalysisObject};
@@ -413,6 +414,16 @@ struct tofSpectra {
     histos.add("Data/neg/pt/its", "neg ITS", kTH1D, {ptAxis});
     histos.add("Data/pos/pt/tpc", "pos TPC", kTH1D, {ptAxis});
     histos.add("Data/neg/pt/tpc", "neg TPC", kTH1D, {ptAxis});
+
+    if (includeCentralityToTracks) {
+      histos.add("Data/cent/pos/pt/its_tpc_tof", "pos ITS-TPC-TOF", kTH3D, {ptAxis, multAxis, occupancyAxis});
+      histos.add("Data/cent/neg/pt/its_tpc_tof", "neg ITS-TPC-TOF", kTH3D, {ptAxis, multAxis, occupancyAxis});
+      histos.add("Data/cent/pos/pt/its_tpc", "pos ITS-TPC", kTH3D, {ptAxis, multAxis, occupancyAxis});
+      histos.add("Data/cent/neg/pt/its_tpc", "neg ITS-TPC", kTH3D, {ptAxis, multAxis, occupancyAxis});
+      histos.add("Data/cent/pos/pt/its_tof", "pos ITS-TOF", kTH3D, {ptAxis, multAxis, occupancyAxis});
+      histos.add("Data/cent/neg/pt/its_tof", "neg ITS-TOF", kTH3D, {ptAxis, multAxis, occupancyAxis});
+    }
+
     if (doprocessOccupancy) {
       const AxisSpec nsigmaTPCAxisOccupancy{binsOptions.binsnsigmaTPC, "nsigmaTPC"};
       histos.add("nsigmatpc/test_occupancy/Mult_vs_Occupancy", "occuppancy vs Multiplicity", kTHnSparseD, {multAxis, occupancyAxis});
@@ -623,7 +634,6 @@ struct tofSpectra {
         }
         histos.add(hpt_den_prm_mcgoodev[i].data(), pTCharge[i], kTH2D, {ptAxis, multAxis});
         histos.add(hpt_den_prm_mcbadev[i].data(), pTCharge[i], kTH2D, {ptAxis, multAxis});
-
         const std::string cpName = Form("/%s/%s", (i < Np) ? "pos" : "neg", pN[i % Np]);
         if (enableDCAxyzHistograms) {
           hDcaXYZPrm[i] = histos.add<TH3>("dcaprm" + cpName, pTCharge[i], kTH3D, {ptAxis, dcaXyAxis, dcaZAxis});
@@ -1102,8 +1112,8 @@ struct tofSpectra {
     return track.isGlobalTrackWoDCA();
   }
 
-  template <bool fillHistograms = false, typename TrackType>
-  bool isTrackSelected(TrackType const& track)
+  template <bool fillHistograms = false, typename TrackType, typename CollisionType>
+  bool isTrackSelected(TrackType const& track, CollisionType const& collision)
   {
     if constexpr (fillHistograms) {
       histos.fill(HIST("tracksel"), 1);
@@ -1321,8 +1331,32 @@ struct tofSpectra {
     const float multiplicity = collision.centFT0C();
     histos.fill(HIST("nsigmatpc/test_occupancy/Mult_vs_Occupancy"), multiplicity, occupancy);
     for (const auto& track : tracks) {
-      if (!isTrackSelected<true>(track)) {
+      if (!isTrackSelected<true>(track, collision)) {
         continue;
+      }
+      if (includeCentralityToTracks) {
+
+        if (track.sign() > 0) {
+          if (track.hasITS() && track.hasTPC() && track.hasTOF()) {
+            histos.fill(HIST("Data/cent/pos/pt/its_tpc_tof"), track.pt(), collision.centFT0C(), occupancy);
+          }
+          if (track.hasITS() && track.hasTOF()) {
+            histos.fill(HIST("Data/cent/pos/pt/its_tof"), track.pt(), collision.centFT0C(), occupancy);
+          }
+          if (track.hasITS() && track.hasTPC()) {
+            histos.fill(HIST("Data/cent/pos/pt/its_tpc"), track.pt(), collision.centFT0C(), occupancy);
+          }
+        } else {
+          if (track.hasITS() && track.hasTPC() && track.hasTOF()) {
+            histos.fill(HIST("Data/cent/neg/pt/its_tpc_tof"), track.pt(), collision.centFT0C(), occupancy);
+          }
+          if (track.hasITS() && track.hasTPC()) {
+            histos.fill(HIST("Data/cent/neg/pt/its_tpc"), track.pt(), collision.centFT0C(), occupancy);
+          }
+          if (track.hasITS() && track.hasTOF()) {
+            histos.fill(HIST("Data/cent/neg/pt/its_tof"), track.pt(), collision.centFT0C(), occupancy);
+          }
+        }
       }
       const auto& nsigmaTPCPi = o2::aod::pidutils::tpcNSigma<2>(track);
       const auto& nsigmaTPCKa = o2::aod::pidutils::tpcNSigma<3>(track);
@@ -1356,7 +1390,7 @@ struct tofSpectra {
     }
     hMultiplicityvsPercentile->Fill(getMultiplicity(collision), collision.multNTracksPV());
     for (const auto& track : tracks) {
-      if (!isTrackSelected<true>(track)) {
+      if (!isTrackSelected<true>(track, collision)) {
         continue;
       }
     }
@@ -1374,7 +1408,7 @@ struct tofSpectra {
       }
       const auto& tracksInCollision = tracks.sliceByCached(aod::spectra::collisionId, collision.globalIndex(), cacheTrk);
       for (const auto& track : tracksInCollision) {
-        if (!isTrackSelected<true>(track)) {
+        if (!isTrackSelected<true>(track, collision)) {
           continue;
         }
         fillParticleHistos<false, PID::Pion>(track, collision);
@@ -1395,7 +1429,7 @@ struct tofSpectra {
       return;                                                                                  \
     }                                                                                          \
     for (const auto& track : tracks) {                                                         \
-      if (!isTrackSelected<false>(track)) {                                                    \
+      if (!isTrackSelected<false>(track, collision)) {                                         \
         continue;                                                                              \
       }                                                                                        \
       fillParticleHistos<isFull, PID::particleId>(track, collision);                           \
