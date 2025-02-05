@@ -196,15 +196,15 @@ DECLARE_JET_DUPLICATE_TABLES_LEVELS(Charged, JTrackSub, HfD0Bases, HfD0PBases, "
 #undef STRINGIFY
 #undef DECLARE_JET_DUPLICATE_TABLES_LEVELS
 
-using JetCollisions = JCollisions;
+using JetCollisions = o2::soa::Join<JCollisions, JCollisionMcInfos>;
 using JetCollision = JetCollisions::iterator;
 using JetCollisionsMCD = o2::soa::Join<JetCollisions, JMcCollisionLbs>;
 using JetCollisionMCD = o2::soa::Join<JetCollisions, JMcCollisionLbs>::iterator;
 using JetTracks = JTracks;
 using JetTracksMCD = o2::soa::Join<JetTracks, JMcTrackLbs>;
 using JetTracksSub = JTrackSubs;
-using JetClusters = JClusters;
-using JetClustersMCD = o2::soa::Join<JClusters, JMcClusterLbs>;
+using JetClusters = o2::soa::Join<JClusters, JClustersCorrectedEnergies, JClusterTracks>;
+using JetClustersMCD = o2::soa::Join<JClusters, JClustersCorrectedEnergies, JClusterTracks, JMcClusterLbs>;
 
 using JetMcCollisions = JMcCollisions;
 using JetMcCollision = JetMcCollisions::iterator;
@@ -228,8 +228,8 @@ using McCollisionsLc = o2::soa::Join<HfLcMcCollBases, JLcMcCollisionIds>;
 using CandidatesLcMCP = o2::soa::Join<HfLcPBases, JLcPIds>;
 
 using CollisionsBplus = o2::soa::Join<HfBplusCollBases, JBplusCollisionIds>;
-using CandidatesBplusData = o2::soa::Join<HfBplusBases, HfBplusPars, HfBplusParEs, HfBplusParD0s, HfBplusMls, HfBplusMlD0s, JBplusIds>;
-using CandidatesBplusMCD = o2::soa::Join<HfBplusBases, HfBplusPars, HfBplusParEs, HfBplusParD0s, HfBplusMls, HfBplusMlD0s, HfBplusMcs, JBplusIds>;
+using CandidatesBplusData = o2::soa::Join<HfBplusBases, HfBplusPars, HfBplusParEs, HfBplusParD0s, HfBplusSels, HfBplusMls, HfBplusMlD0s, JBplusIds>;
+using CandidatesBplusMCD = o2::soa::Join<HfBplusBases, HfBplusPars, HfBplusParEs, HfBplusParD0s, HfBplusSels, HfBplusMls, HfBplusMlD0s, HfBplusMcs, JBplusIds>;
 using JetTracksSubBplus = JTrackBplusSubs;
 using JetParticlesSubBplus = JMcParticleBplusSubs;
 using McCollisionsBplus = o2::soa::Join<HfBplusMcCollBases, JBplusMcCollisionIds>;

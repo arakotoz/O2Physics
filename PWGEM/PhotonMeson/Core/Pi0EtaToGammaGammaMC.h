@@ -125,6 +125,7 @@ struct Pi0EtaToGammaGammaMC {
     Configurable<float> cfg_max_qt_ap{"cfg_max_qt_ap", 0.01, "max qT for AP cut"};
     Configurable<float> cfg_min_cospa{"cfg_min_cospa", 0.997, "min V0 CosPA"};
     Configurable<float> cfg_max_pca{"cfg_max_pca", 3.0, "max distance btween 2 legs"};
+    Configurable<float> cfg_max_chi2kf{"cfg_max_chi2kf", 1e+10, "max chi2/ndf with KF"};
     Configurable<bool> cfg_require_v0_with_correct_xz{"cfg_require_v0_with_correct_xz", true, "flag to select V0s with correct xz"};
     Configurable<bool> cfg_reject_v0_on_itsib{"cfg_reject_v0_on_itsib", true, "flag to reject V0s on ITSib"};
 
@@ -301,6 +302,7 @@ struct Pi0EtaToGammaGammaMC {
     fV0PhotonCut.SetV0EtaRange(-pcmcuts.cfg_max_eta_v0, +pcmcuts.cfg_max_eta_v0);
     fV0PhotonCut.SetMinCosPA(pcmcuts.cfg_min_cospa);
     fV0PhotonCut.SetMaxPCA(pcmcuts.cfg_max_pca);
+    fV0PhotonCut.SetMaxChi2KF(pcmcuts.cfg_max_chi2kf);
     fV0PhotonCut.SetRxyRange(pcmcuts.cfg_min_v0radius, pcmcuts.cfg_max_v0radius);
     fV0PhotonCut.SetAPRange(pcmcuts.cfg_max_alpha_ap, pcmcuts.cfg_max_qt_ap);
     fV0PhotonCut.RejectITSib(pcmcuts.cfg_reject_v0_on_itsib);
@@ -392,8 +394,8 @@ struct Pi0EtaToGammaGammaMC {
     fEMCCut.SetM02Range(emccuts.EMC_minM02, emccuts.EMC_maxM02);
     fEMCCut.SetTimeRange(emccuts.EMC_minTime, emccuts.EMC_maxTime);
 
-    fEMCCut.SetTrackMatchingEta([a, b, c](float pT) { return a + pow(pT + b, c); });
-    fEMCCut.SetTrackMatchingPhi([d, e, f](float pT) { return d + pow(pT + e, f); });
+    fEMCCut.SetTrackMatchingEta([a, b, c](float pT) { return a + std::pow(pT + b, c); });
+    fEMCCut.SetTrackMatchingPhi([d, e, f](float pT) { return d + std::pow(pT + e, f); });
 
     fEMCCut.SetMinEoverP(emccuts.EMC_Eoverp);
     fEMCCut.SetUseExoticCut(emccuts.EMC_UseExoticCut);
@@ -441,13 +443,13 @@ struct Pi0EtaToGammaGammaMC {
         continue;
       }
 
-      o2::aod::pwgem::photonmeson::utils::eventhistogram::fillEventInfo<0>(&fRegistry, collision);
+      o2::aod::pwgem::photonmeson::utils::eventhistogram::fillEventInfo<0>(&fRegistry, collision, collision.weight());
       if (!fEMEventCut.IsSelected(collision)) {
         continue;
       }
-      o2::aod::pwgem::photonmeson::utils::eventhistogram::fillEventInfo<1>(&fRegistry, collision);
-      fRegistry.fill(HIST("Event/before/hCollisionCounter"), 12.0); // accepted
-      fRegistry.fill(HIST("Event/after/hCollisionCounter"), 12.0);  // accepted
+      o2::aod::pwgem::photonmeson::utils::eventhistogram::fillEventInfo<1>(&fRegistry, collision, collision.weight());
+      fRegistry.fill(HIST("Event/before/hCollisionCounter"), 12.0, collision.weight()); // accepted
+      fRegistry.fill(HIST("Event/after/hCollisionCounter"), 12.0, collision.weight());  // accepted
 
       int photonid1 = -1, photonid2 = -1, pi0id = -1, etaid = -1;
       if constexpr (pairtype == PairType::kPCMPCM || pairtype == PairType::kPHOSPHOS || pairtype == PairType::kEMCEMC) { // same kinds pairing
@@ -505,7 +507,7 @@ struct Pi0EtaToGammaGammaMC {
           ROOT::Math::PtEtaPhiMVector v1(g1.pt(), g1.eta(), g1.phi(), 0.);
           ROOT::Math::PtEtaPhiMVector v2(g2.pt(), g2.eta(), g2.phi(), 0.);
           ROOT::Math::PtEtaPhiMVector v12 = v1 + v2;
-          if (abs(v12.Rapidity()) > maxY_rec) {
+          if (std::abs(v12.Rapidity()) > maxY_rec) {
             continue;
           }
 
@@ -566,7 +568,7 @@ struct Pi0EtaToGammaGammaMC {
             ROOT::Math::PtEtaPhiMVector v_pos(pos2.pt(), pos2.eta(), pos2.phi(), o2::constants::physics::MassElectron);
             ROOT::Math::PtEtaPhiMVector v_ele(ele2.pt(), ele2.eta(), ele2.phi(), o2::constants::physics::MassElectron);
             ROOT::Math::PtEtaPhiMVector veeg = v_gamma + v_pos + v_ele;
-            if (abs(veeg.Rapidity()) > maxY_rec) {
+            if (std::abs(veeg.Rapidity()) > maxY_rec) {
               continue;
             }
             if (pi0id > 0) {
@@ -589,7 +591,7 @@ struct Pi0EtaToGammaGammaMC {
           ROOT::Math::PtEtaPhiMVector v1(g1.pt(), g1.eta(), g1.phi(), 0.);
           ROOT::Math::PtEtaPhiMVector v2(g2.pt(), g2.eta(), g2.phi(), 0.);
           ROOT::Math::PtEtaPhiMVector v12 = v1 + v2;
-          if (abs(v12.Rapidity()) > maxY_rec) {
+          if (std::abs(v12.Rapidity()) > maxY_rec) {
             continue;
           }
           // if (pi0id > 0) {
@@ -645,6 +647,10 @@ struct Pi0EtaToGammaGammaMC {
     for (auto& collision : collisions) {
       if ((pairtype == kPHOSPHOS || pairtype == kPCMPHOS) && !collision.alias_bit(triggerAliases::kTVXinPHOS)) {
         continue; // I don't know why this is necessary in simulation.
+      }
+
+      if (eventcuts.onlyKeepWeightedEvents && fabs(collision.weight() - 1.) < 1E-10) {
+        continue;
       }
 
       float centralities[3] = {collision.centFT0M(), collision.centFT0A(), collision.centFT0C()};

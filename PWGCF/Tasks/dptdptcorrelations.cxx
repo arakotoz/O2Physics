@@ -57,7 +57,6 @@ using namespace o2::framework::expressions;
 namespace correlationstask
 {
 using namespace o2::analysis::dptdptfilter;
-float phibinshift = 0.5;
 float etabinwidth = (etaup - etalow) / static_cast<float>(etabins);
 float phibinwidth = (phiup - philow) / static_cast<float>(phibins);
 int deltaetabins = etabins * 2 - 1;
@@ -99,6 +98,7 @@ struct DptDptCorrelationsTask {
     /* histograms */
     TH1F* fhVertexZA;                                                            //!<! the z vertex distribution for the current multiplicity/centrality class
     std::vector<TH1F*> fhN1VsPt{nch, nullptr};                                   //!<! weighted single particle distribution vs \f$p_T\f$, for the different species
+    std::vector<TH2F*> fhN1VsPtEta{nch, nullptr};                                //!<! weighted single particle distribution vs \f$p_T,\;\eta\f$, for the different species
     std::vector<TH2F*> fhN1VsEtaPhi{nch, nullptr};                               //!<! weighted single particle distribution vs \f$\eta,\;\phi\f$, for the different species
     std::vector<TH2F*> fhSum1PtVsEtaPhi{nch, nullptr};                           //!<! accumulated sum of weighted \f$p_T\f$ vs \f$\eta,\;\phi\f$, for the different species
     std::vector<TH3F*> fhN1VsZEtaPhiPt{nch, nullptr};                            //!<! single particle distribution vs \f$\mbox{vtx}_z,\; \eta,\;\phi,\;p_T\f$, for the different species
@@ -300,11 +300,11 @@ struct DptDptCorrelationsTask {
     {
       using namespace correlationstask;
 
-      LOGF(info, "Stored NUA&NUE corrections for %d track ids", corrs.size());
+      LOGF(info, "Storing NUA&NUE corrections for %d track ids", corrs.size());
       for (uint i = 0; i < corrs.size(); ++i) {
         if (corrs[i] != nullptr) {
           if (nNoOfDimensions != corrs[i]->GetDimension()) {
-            LOGF(fatal, "  Corrections receved dimensions %d for track id %d different than expected %d", corrs[i]->GetDimension(), i, nNoOfDimensions);
+            LOGF(fatal, "  Corrections received dimensions %d for track id %d different than expected %d", corrs[i]->GetDimension(), i, nNoOfDimensions);
           } else {
             LOGF(info, "  Storing NUA&NUE corrections %s for track id %d with %d dimensions %s",
                  corrs[i] != nullptr ? corrs[i]->GetName() : "nullptr", i, nNoOfDimensions, corrs[i] != nullptr ? "yes" : "no");
@@ -332,7 +332,7 @@ struct DptDptCorrelationsTask {
               }
             }
           }
-          LOGF(info, "Average NUA&NUE correction for track id %d: %f", i, avg / nbins);
+          LOGF(info, "  Average NUA&NUE correction for track id %d: %f", i, avg / nbins);
         }
       }
       ccdbstored = true;
@@ -408,6 +408,7 @@ struct DptDptCorrelationsTask {
         float corr = (*corrs)[index];
         fhN1VsPt[track.trackacceptedid()]->Fill(track.pt(), corr);
         if constexpr (smallsingles) {
+          fhN1VsPtEta[track.trackacceptedid()]->Fill(track.eta(), track.pt(), corr);
           fhN1VsEtaPhi[track.trackacceptedid()]->Fill(track.eta(), getShiftedPhi(track.phi()), corr);
           fhSum1PtVsEtaPhi[track.trackacceptedid()]->Fill(track.eta(), getShiftedPhi(track.phi()), track.pt() * corr);
         } else {
@@ -440,6 +441,7 @@ struct DptDptCorrelationsTask {
         n1nw[track.trackacceptedid()] += 1;
         sum1Ptnw[track.trackacceptedid()] += track.pt();
 
+        fhN1VsPtEta[track.trackacceptedid()]->Fill(track.eta(), track.pt(), corr);
         fhN1VsEtaPhi[track.trackacceptedid()]->Fill(track.eta(), getShiftedPhi(track.phi()), corr);
         fhSum1PtVsEtaPhi[track.trackacceptedid()]->Fill(track.eta(), getShiftedPhi(track.phi()), track.pt() * corr);
         index++;
@@ -673,6 +675,9 @@ struct DptDptCorrelationsTask {
           /* we don't want the Sumw2 structure being created here */
           bool defSumw2 = TH1::GetDefaultSumw2();
           if constexpr (smallsingles) {
+            fhN1VsPtEta[i] = new TH2F(TString::Format("n1_%s_vsPtEta", tnames[i].c_str()).Data(),
+                                      TString::Format("#LT n_{1_{%s}} #GT;#eta;#it{p}_{T}", tnames[i].c_str()).Data(),
+                                      etabins, etalow, etaup, ptbins, ptlow, ptup);
             fhN1VsEtaPhi[i] = new TH2F(TString::Format("n1_%s_vsEtaPhi", tnames[i].c_str()).Data(),
                                        TString::Format("#LT n_{1} #GT;#eta_{%s};#varphi_{%s} (radian);#LT n_{1} #GT", tnames[i].c_str(), tnames[i].c_str()).Data(),
                                        etabins, etalow, etaup, phibins, philow, phiup);
@@ -723,6 +728,8 @@ struct DptDptCorrelationsTask {
 
           /* the statistical uncertainties will be estimated by the subsamples method so let's get rid of the error tracking */
           if constexpr (smallsingles) {
+            fhN1VsPtEta[i]->SetBit(TH1::kIsNotW);
+            fhN1VsPtEta[i]->Sumw2(false);
             fhN1VsEtaPhi[i]->SetBit(TH1::kIsNotW);
             fhN1VsEtaPhi[i]->Sumw2(false);
             fhSum1PtVsEtaPhi[i]->SetBit(TH1::kIsNotW);
@@ -738,6 +745,7 @@ struct DptDptCorrelationsTask {
 
           fOutputList->Add(fhN1VsPt[i]);
           if constexpr (smallsingles) {
+            fOutputList->Add(fhN1VsPtEta[i]);
             fOutputList->Add(fhN1VsEtaPhi[i]);
             fOutputList->Add(fhSum1PtVsEtaPhi[i]);
           } else {
@@ -748,6 +756,9 @@ struct DptDptCorrelationsTask {
       } else {
         for (uint i = 0; i < nch; ++i) {
           /* histograms for each track species */
+          fhN1VsPtEta[i] = new TH2F(TString::Format("n1_%s_vsPtEta", tnames[i].c_str()).Data(),
+                                    TString::Format("#LT n_{1_{%s}} #GT;#eta;#it{p}_{T}", tnames[i].c_str()).Data(),
+                                    etabins, etalow, etaup, ptbins, ptlow, ptup);
           fhN1VsEtaPhi[i] = new TH2F(TString::Format("n1_%s_vsEtaPhi", tnames[i].c_str()).Data(),
                                      TString::Format("#LT n_{1} #GT;#eta_{%s};#varphi_{%s} (radian);#LT n_{1} #GT", tnames[i].c_str(), tnames[i].c_str()).Data(),
                                      etabins, etalow, etaup, phibins, philow, phiup);
@@ -769,6 +780,7 @@ struct DptDptCorrelationsTask {
                                           TString::Format("#LT #Sigma p_{t,%s} #GT;Centrality/Multiplicity (%%);#LT #Sigma p_{t,%s} #GT (GeV/c)", tnames[i].c_str(), tnames[i].c_str()).Data(), 100, 0.0, 100.0);
           fhNuaNue[i] = nullptr;
           fhPtAvgVsEtaPhi[i] = nullptr;
+          fOutputList->Add(fhN1VsPtEta[i]);
           fOutputList->Add(fhN1VsEtaPhi[i]);
           fOutputList->Add(fhSum1PtVsEtaPhi[i]);
           fOutputList->Add(fhN1VsC[i]);
@@ -1134,7 +1146,7 @@ struct DptDptCorrelationsTask {
           if (!corrana) {
             LOGF(fatal, "Mixed events makes not sense to run it without correlations, please configure properly!!");
           }
-          dataCEME[i] = buildCEInstance(range.Data(), false, false, true);
+          dataCEME[i] = buildCEInstance(range.Data(), false, true, true);
         }
       }
       for (int i = 0; i < ncmranges; ++i) {
@@ -1201,7 +1213,7 @@ struct DptDptCorrelationsTask {
   {
     using namespace correlationstask;
 
-    static constexpr std::string_view kStrDim[] = {"", "2D", "3D", "4D"};
+    static constexpr std::string_view kStrDim[] = {"", "", "2D", "3D", "4D"};
     return kStrDim[nNoOfDimensions].data();
   }
 
@@ -1255,13 +1267,13 @@ struct DptDptCorrelationsTask {
         } else {
           std::vector<TH1*> corrs{tnames.size(), nullptr};
           for (uint isp = 0; isp < tnames.size(); ++isp) {
-            corrs[isp] = reinterpret_cast<TH1*>(ccdblst->FindObject(
-              TString::Format("correction%s_%02d-%02d_%s",
-                              getDimensionStr(),
-                              static_cast<int>(fCentMultMin[ixDCE]),
-                              static_cast<int>(fCentMultMax[ixDCE]),
-                              tnames[isp].c_str())
-                .Data()));
+            auto hName = TString::Format("correction%s_%02d-%02d_%s", getDimensionStr(), static_cast<int>(fCentMultMin[ixDCE]), static_cast<int>(fCentMultMax[ixDCE]), tnames[isp].c_str());
+            corrs[isp] = reinterpret_cast<TH1*>(ccdblst->FindObject(hName.Data()));
+            if (corrs[isp] != nullptr) {
+              LOGF(info, "Loaded %s", corrs[isp]->GetName());
+            } else {
+              LOGF(warning, "No correction histogram for species %d with name %s", isp, hName.Data());
+            }
           }
           storeTrackCorrections(corrs);
           std::vector<TH2*> ptavgs{tnames.size(), nullptr};
@@ -1330,13 +1342,13 @@ struct DptDptCorrelationsTask {
         } else {
           std::vector<TH1*> corrs{tnames.size(), nullptr};
           for (uint isp = 0; isp < tnames.size(); ++isp) {
-            corrs[isp] = reinterpret_cast<TH1*>(ccdblst->FindObject(
-              TString::Format("correction%s_%02d-%02d_%s",
-                              getDimensionStr(),
-                              static_cast<int>(fCentMultMin[ixDCE]),
-                              static_cast<int>(fCentMultMax[ixDCE]),
-                              tnames[isp].c_str())
-                .Data()));
+            auto hName = TString::Format("correction%s_%02d-%02d_%s", getDimensionStr(), static_cast<int>(fCentMultMin[ixDCE]), static_cast<int>(fCentMultMax[ixDCE]), tnames[isp].c_str());
+            corrs[isp] = reinterpret_cast<TH1*>(ccdblst->FindObject(hName.Data()));
+            if (corrs[isp] != nullptr) {
+              LOGF(info, "Loaded %s", corrs[isp]->GetName());
+            } else {
+              LOGF(warning, "No correction histogram for species %d with name %s", isp, hName.Data());
+            }
           }
           dataCEME[ixDCE]->storeTrackCorrections(corrs);
           std::vector<TH2*> ptavgs{tnames.size(), nullptr};
