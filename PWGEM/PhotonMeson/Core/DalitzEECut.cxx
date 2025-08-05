@@ -13,11 +13,12 @@
 // Class for dilepton Cut
 //
 
-#include <utility>
-#include <set>
+#include "PWGEM/PhotonMeson/Core/DalitzEECut.h"
 
 #include "Framework/Logger.h"
-#include "PWGEM/PhotonMeson/Core/DalitzEECut.h"
+
+#include <set>
+#include <utility>
 
 ClassImp(DalitzEECut);
 
@@ -81,6 +82,11 @@ void DalitzEECut::SetMinNCrossedRowsOverFindableClustersTPC(float minNCrossedRow
   mMinNCrossedRowsOverFindableClustersTPC = minNCrossedRowsOverFindableClustersTPC;
   LOG(info) << "DalitzEE Cut, set min N crossed rows over findable clusters TPC: " << mMinNCrossedRowsOverFindableClustersTPC;
 }
+void DalitzEECut::SetMaxFracSharedClustersTPC(float max)
+{
+  mMaxFracSharedClustersTPC = max;
+  LOG(info) << "Dalitz EE Cut, set max fraction of shared clusters in  TPC: " << mMaxFracSharedClustersTPC;
+}
 void DalitzEECut::SetChi2PerClusterTPC(float min, float max)
 {
   mMinChi2PerClusterTPC = min;
@@ -105,6 +111,12 @@ void DalitzEECut::SetMeanClusterSizeITS(float min, float max)
   mMinMeanClusterSizeITS = min;
   mMaxMeanClusterSizeITS = max;
   LOG(info) << "DalitzEE Cut, set mean cluster size ITS range: " << mMinMeanClusterSizeITS << " - " << mMaxMeanClusterSizeITS;
+}
+void DalitzEECut::SetTrackDca3DRange(float min, float max)
+{
+  mMinDca3D = min;
+  mMaxDca3D = max;
+  LOG(info) << "DalitzEE Cut, set DCA 3D range in sigma: " << mMinDca3D << " - " << mMaxDca3D;
 }
 void DalitzEECut::SetMaxDcaXY(float maxDcaXY)
 {
@@ -167,4 +179,10 @@ void DalitzEECut::SetPIDScheme(int scheme)
 {
   mPIDScheme = scheme;
   LOG(info) << "DalitzEE Cut, PID scheme: " << static_cast<int>(mPIDScheme);
+}
+void DalitzEECut::IncludeITSsa(bool flag, float max)
+{
+  mIncludeITSsa = flag;
+  mMaxPtITSsa = max;
+  LOG(info) << "DalitzEE Cut, include ITSsa tracks: " << mIncludeITSsa << ", mMaxPtITSsa = " << mMaxPtITSsa;
 }

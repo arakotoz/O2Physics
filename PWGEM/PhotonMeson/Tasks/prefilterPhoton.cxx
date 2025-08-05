@@ -14,32 +14,33 @@
 // This code produces information on prefilter for photon.
 //    Please write to: daiki.sekihata@cern.ch
 
-#include <string>
-#include <vector>
-#include <unordered_map>
 #include <map>
+#include <string>
 #include <tuple>
+#include <unordered_map>
+#include <vector>
 
 // #include "TString.h"
-#include "Math/Vector4D.h"
-#include "Framework/runDataProcessing.h"
-#include "Framework/AnalysisTask.h"
 #include "Framework/ASoAHelpers.h"
+#include "Framework/AnalysisTask.h"
+#include "Framework/runDataProcessing.h"
+
+#include "Math/Vector4D.h"
 // #include "Common/Core/RecoDecay.h"
-#include "Common/Core/trackUtilities.h"
-
-#include "DetectorsBase/Propagator.h"
-#include "DetectorsBase/GeometryManager.h"
-#include "DataFormatsParameters/GRPObject.h"
-#include "DataFormatsParameters/GRPMagField.h"
-#include "CCDB/BasicCCDBManager.h"
-
+#include "PWGEM/Dilepton/Utils/PairUtilities.h"
+#include "PWGEM/PhotonMeson/Core/DalitzEECut.h"
+#include "PWGEM/PhotonMeson/Core/EMPhotonEventCut.h"
+#include "PWGEM/PhotonMeson/Core/V0PhotonCut.h"
 #include "PWGEM/PhotonMeson/DataModel/gammaTables.h"
 #include "PWGEM/PhotonMeson/Utils/PairUtilities.h"
-#include "PWGEM/PhotonMeson/Core/V0PhotonCut.h"
-#include "PWGEM/PhotonMeson/Core/EMPhotonEventCut.h"
-#include "PWGEM/PhotonMeson/Core/DalitzEECut.h"
-#include "PWGEM/Dilepton/Utils/PairUtilities.h"
+
+#include "Common/Core/trackUtilities.h"
+
+#include "CCDB/BasicCCDBManager.h"
+#include "DataFormatsParameters/GRPMagField.h"
+#include "DataFormatsParameters/GRPObject.h"
+#include "DetectorsBase/GeometryManager.h"
+#include "DetectorsBase/Propagator.h"
 
 using namespace o2;
 using namespace o2::aod;
@@ -51,7 +52,7 @@ using namespace o2::aod::pwgem::photonmeson::photonpair;
 using MyCollisions = soa::Join<aod::EMEvents, aod::EMEventsCent>;
 using MyCollision = MyCollisions::iterator;
 
-using MyV0Photons = soa::Join<aod::V0PhotonsKF, aod::V0PhotonsKFCov, aod::V0KFEMEventIds>;
+using MyV0Photons = soa::Join<aod::V0PhotonsKF, aod::V0KFEMEventIds>;
 using MyV0Photon = MyV0Photons::iterator;
 
 using MyPrimaryElectrons = soa::Join<aod::EMPrimaryElectronsFromDalitz, aod::EMPrimaryElectronEMEventIds>;
@@ -133,13 +134,15 @@ struct prefilterPhoton {
     Configurable<float> cfg_max_pt_track{"cfg_max_pt_track", 1e+10, "max pT for single track"};
     Configurable<float> cfg_min_eta_track{"cfg_min_eta_track", -2.0, "min eta for single track"};
     Configurable<float> cfg_max_eta_track{"cfg_max_eta_track", 2.0, "max eta for single track"};
-    Configurable<int> cfg_min_ncluster_tpc{"cfg_min_ncluster_tpc", 40, "min ncluster tpc"};
     Configurable<int> cfg_min_ncluster_its{"cfg_min_ncluster_its", 5, "min ncluster its"};
+    Configurable<int> cfg_min_ncluster_tpc{"cfg_min_ncluster_tpc", 40, "min ncluster tpc"};
     Configurable<int> cfg_min_ncrossedrows{"cfg_min_ncrossedrows", 0, "min ncrossed rows"};
+    Configurable<float> cfg_max_frac_shared_clusters_tpc{"cfg_max_frac_shared_clusters_tpc", 999.f, "max fraction of shared clusters in TPC"};
     Configurable<float> cfg_max_chi2tpc{"cfg_max_chi2tpc", 4.0, "max chi2/NclsTPC"};
     Configurable<float> cfg_max_chi2its{"cfg_max_chi2its", 5.0, "max chi2/NclsITS"};
-    Configurable<float> cfg_max_dcaxy{"cfg_max_dcaxy", 0.05, "max dca XY for single track in cm"};
-    Configurable<float> cfg_max_dcaz{"cfg_max_dcaz", 0.05, "max dca Z for single track in cm"};
+    Configurable<float> cfg_max_dcaxy{"cfg_max_dcaxy", 1.f, "max dca XY for single track in cm"};
+    Configurable<float> cfg_max_dcaz{"cfg_max_dcaz", 1.f, "max dca Z for single track in cm"};
+    Configurable<float> cfg_max_dca3dsigma_track{"cfg_max_dca3dsigma_track", 1.5, "max DCA 3D in sigma"};
 
     Configurable<int> cfg_pid_scheme{"cfg_pid_scheme", static_cast<int>(DalitzEECut::PIDSchemes::kTOFif), "pid scheme [kTOFif : 0, kTPConly : 1]"};
     Configurable<float> cfg_min_TPCNsigmaEl{"cfg_min_TPCNsigmaEl", -2.0, "min. TPC n sigma for electron inclusion"};
@@ -298,11 +301,13 @@ struct prefilterPhoton {
     fDileptonCut.SetMinNClustersTPC(dileptoncuts.cfg_min_ncluster_tpc);
     fDileptonCut.SetMinNCrossedRowsTPC(dileptoncuts.cfg_min_ncrossedrows);
     fDileptonCut.SetMinNCrossedRowsOverFindableClustersTPC(0.8);
+    fDileptonCut.SetMaxFracSharedClustersTPC(dileptoncuts.cfg_max_frac_shared_clusters_tpc);
     fDileptonCut.SetChi2PerClusterTPC(0.0, dileptoncuts.cfg_max_chi2tpc);
     fDileptonCut.SetChi2PerClusterITS(0.0, dileptoncuts.cfg_max_chi2its);
     fDileptonCut.SetNClustersITS(dileptoncuts.cfg_min_ncluster_its, 7);
     fDileptonCut.SetMaxDcaXY(dileptoncuts.cfg_max_dcaxy);
     fDileptonCut.SetMaxDcaZ(dileptoncuts.cfg_max_dcaz);
+    fDileptonCut.SetTrackDca3DRange(0.f, dileptoncuts.cfg_max_dca3dsigma_track); // in sigma
 
     // for eID
     fDileptonCut.SetPIDScheme(dileptoncuts.cfg_pid_scheme);

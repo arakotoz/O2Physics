@@ -1,4 +1,4 @@
-// Copyright 2019-2023 CERN and copyright holders of ALICE O2.
+// Copyright 2019-2025 CERN and copyright holders of ALICE O2.
 // See https://alice-o2.web.cern.ch/copyright for details of the copyright holders.
 // All rights not expressly granted are reserved.
 //
@@ -15,43 +15,43 @@
 //
 // \author Daiki Sekihata <daiki.sekihata@cern.ch>, Tokyo
 
-#include <cmath>
-#include <array>
-#include <cstdlib>
-#include <map>
-#include <iterator>
-#include <utility>
-#include <string>
-#include <set>
-#include <algorithm>
-#include <vector>
-#include <unordered_map>
-
-#include "Math/Vector4D.h"
-
-#include "Framework/runDataProcessing.h"
-#include "Framework/RunningWorkflowInfo.h"
-#include "Framework/AnalysisTask.h"
-#include "Framework/AnalysisDataModel.h"
-#include "Framework/ASoAHelpers.h"
-#include "ReconstructionDataFormats/Track.h"
-#include "Common/Core/RecoDecay.h"
-#include "Common/Core/trackUtilities.h"
-#include "Common/Core/TrackSelection.h"
-#include "Common/DataModel/TrackSelectionTables.h"
-#include "DetectorsBase/Propagator.h"
-#include "DetectorsBase/GeometryManager.h"
-#include "DataFormatsParameters/GRPObject.h"
-#include "DataFormatsParameters/GRPMagField.h"
-#include "CCDB/BasicCCDBManager.h"
-#include "Common/Core/TableHelper.h"
-#include "Common/Core/TPCVDriftManager.h"
-
-#include "Tools/KFparticle/KFUtilities.h"
-
 #include "PWGEM/PhotonMeson/DataModel/gammaTables.h"
 #include "PWGEM/PhotonMeson/Utils/PCMUtilities.h"
 #include "PWGEM/PhotonMeson/Utils/TrackSelection.h"
+
+#include "Common/Core/RecoDecay.h"
+#include "Common/Core/TPCVDriftManager.h"
+#include "Common/Core/TableHelper.h"
+#include "Common/Core/TrackSelection.h"
+#include "Common/Core/trackUtilities.h"
+#include "Common/DataModel/TrackSelectionTables.h"
+#include "Tools/KFparticle/KFUtilities.h"
+
+#include "CCDB/BasicCCDBManager.h"
+#include "DataFormatsParameters/GRPMagField.h"
+#include "DataFormatsParameters/GRPObject.h"
+#include "DetectorsBase/GeometryManager.h"
+#include "DetectorsBase/Propagator.h"
+#include "Framework/ASoAHelpers.h"
+#include "Framework/AnalysisDataModel.h"
+#include "Framework/AnalysisTask.h"
+#include "Framework/RunningWorkflowInfo.h"
+#include "Framework/runDataProcessing.h"
+#include "ReconstructionDataFormats/Track.h"
+
+#include "Math/Vector4D.h"
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstdlib>
+#include <iterator>
+#include <map>
+#include <set>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 using namespace o2;
 using namespace o2::soa;
@@ -61,18 +61,18 @@ using namespace o2::constants::physics;
 using namespace o2::pwgem::photonmeson;
 using std::array;
 
-using MyCollisions = soa::Join<aod::Collisions, aod::EvSels>;
+using MyCollisions = soa::Join<aod::Collisions, aod::EvSels, aod::EMEvSels>;
 using MyCollisionsWithSWT = soa::Join<MyCollisions, aod::EMSWTriggerInfosTMP>;
 using MyCollisionsMC = soa::Join<MyCollisions, aod::McCollisionLabels>;
 
-using MyTracksIU = soa::Join<aod::TracksIU, aod::TracksExtra, aod::TracksCovIU, aod::TracksDCA, aod::pidTPCFullEl, aod::pidTPCFullPi>;
-using MyTracksIUMC = soa::Join<MyTracksIU, aod::McTrackLabels>;
+using MyTracksIU = soa::Join<aod::TracksIU, aod::TracksExtra, aod::TracksCovIU, aod::pidTPCFullEl, aod::pidTPCFullPi>;
+using MyTracksIUMC = soa::Join<MyTracksIU, aod::McTrackLabels, aod::mcTPCTuneOnData>;
 
 struct PhotonConversionBuilder {
   Produces<aod::V0PhotonsKF> v0photonskf;
-  Produces<aod::V0PhotonsKFCov> v0photonskfcov;
   Produces<aod::V0Legs> v0legs;
-  Produces<aod::EMEventsNgPCM> events_ngpcm;
+  // Produces<aod::V0PhotonsKFCov> v0photonskfcov;
+  // Produces<aod::EMEventsNgPCM> events_ngpcm;
 
   // CCDB options
   Configurable<std::string> ccdburl{"ccdb-url", "http://alice-ccdb.cern.ch", "url of the ccdb repository"};
@@ -81,18 +81,18 @@ struct PhotonConversionBuilder {
   Configurable<std::string> lutPath{"lutPath", "GLO/Param/MatLUT", "Path of the Lut parametrization"};
   Configurable<std::string> geoPath{"geoPath", "GLO/Config/GeometryAligned", "Path of the geometry file"};
   Configurable<bool> skipGRPOquery{"skipGRPOquery", true, "skip grpo query"};
-  Configurable<bool> inherit_from_emevent_photon{"inherit_from_emevent_photon", false, "flag to inherit task options from emevent-photon"};
 
   // Operation and minimisation criteria
   Configurable<double> d_bz_input{"d_bz", -999, "bz field, -999 is automatic"};
   Configurable<int> useMatCorrType{"useMatCorrType", 0, "0: none, 1: TGeo, 2: LUT"};
-  Configurable<bool> applyEveSel_at_skimming{"applyEveSel_at_skimming", false, "flag to apply minimal event selection at the skimming level"};
 
   // single track cuts
   Configurable<int> min_ncluster_tpc{"min_ncluster_tpc", 0, "min ncluster tpc"};
   Configurable<int> mincrossedrows{"mincrossedrows", 40, "min crossed rows"};
   Configurable<bool> moveTPCTracks{"moveTPCTracks", true, "Move TPC-only tracks under the collision assumption"};
   Configurable<bool> disableITSonlyTracks{"disableITSonlyTracks", false, "disable ITSonly tracks in V0 legs"};
+  Configurable<bool> disableTPConlyTracks{"disableTPConlyTracks", false, "disable TPConly tracks in V0 legs"};
+  Configurable<bool> requireITShit{"requireITShit", false, "require ITS hit to V0 legs"};
 
   Configurable<float> maxchi2tpc{"maxchi2tpc", 5.0, "max chi2/NclsTPC"}; // default 4.0 + 1.0
   Configurable<float> maxchi2its{"maxchi2its", 6.0, "max chi2/NclsITS"}; // default 5.0 + 1.0
@@ -166,13 +166,14 @@ struct PhotonConversionBuilder {
       {"V0/hPCA_diffX", "PCA vs. trackiu X - R_{xy};distance btween 2 legs (cm);min trackiu X - R_{xy} (cm)", {HistType::kTH2F, {{500, 0.0f, 5.f}, {100, -50.0, 50.0f}}}},
       {"V0Leg/hPt", "pT of leg at SV;p_{T,e} (GeV/c)", {HistType::kTH1F, {{1000, 0.0f, 10.0f}}}},
       {"V0Leg/hEtaPhi", "#eta vs. #varphi of leg at SV;#varphi (rad.);#eta", {HistType::kTH2F, {{72, 0.0f, 2 * M_PI}, {200, -1, +1}}}},
+      {"V0Leg/hRelDeltaPt", "pT resolution;p_{T} (GeV/c);#Deltap_{T}/p_{T}", {HistType::kTH2F, {{1000, 0.f, 10.f}, {100, 0, 1}}}},
       {"V0Leg/hDCAxyz", "DCA xy vs. z to PV;DCA_{xy} (cm);DCA_{z} (cm)", {HistType::kTH2F, {{200, -50.f, 50.f}, {200, -50.f, +50.f}}}},
       {"V0Leg/hdEdx_Pin", "TPC dE/dx vs. p_{in};p_{in} (GeV/c);TPC dE/dx", {HistType::kTH2F, {{1000, 0.f, 10.f}, {200, 0.f, 200.f}}}},
       {"V0Leg/hTPCNsigmaEl", "TPC dE/dx vs. p_{in};p_{in} (GeV/c);n #sigma_{e}^{TPC}", {HistType::kTH2F, {{1000, 0.f, 10.f}, {100, -5.f, +5.f}}}},
       {"V0Leg/hXZ", "track iu x vs. z;z (cm);x (cm)", {HistType::kTH2F, {{200, -100.f, 100.f}, {200, 0.f, 100.f}}}},
     }};
 
-  void init(InitContext& initContext)
+  void init(InitContext&)
   {
     mRunNumber = 0;
     d_bz = 0;
@@ -183,10 +184,6 @@ struct PhotonConversionBuilder {
     ccdb->setCaching(true);
     ccdb->setLocalObjectValidityChecking();
     ccdb->setFatalWhenNull(false);
-
-    if (inherit_from_emevent_photon) {
-      getTaskOptionValue(initContext, "create-emevent-photon", "applyEveSel_at_skimming", applyEveSel_at_skimming.value, true);
-    }
 
     if (useMatCorrType == 1) {
       LOGF(info, "TGeo correction requested, loading geometry");
@@ -280,6 +277,14 @@ struct PhotonConversionBuilder {
       return false;
     }
 
+    if (disableTPConlyTracks && isTPConlyTrack(track)) {
+      return false;
+    }
+
+    if (requireITShit && !track.hasITS()) {
+      return false;
+    }
+
     if (track.x() > maxX) {
       return false;
     }
@@ -332,10 +337,10 @@ struct PhotonConversionBuilder {
     float px = kfp.GetPx();
     float py = kfp.GetPy();
     float cospaXY = RecoDecay::dotProd(std::array{lx, ly}, std::array{px, py}) / (RecoDecay::sqrtSumOfSquares(lx, ly) * RecoDecay::sqrtSumOfSquares(px, py));
-    if (cospaXY < -1.) {
-      return -1.;
-    } else if (cospaXY > 1.) {
-      return 1.;
+    if (cospaXY < -1.f) {
+      return -1.f;
+    } else if (cospaXY > 1.f) {
+      return 1.f;
     }
     return cospaXY;
   }
@@ -351,24 +356,29 @@ struct PhotonConversionBuilder {
     float pz = kfp.GetPz();
 
     float cospaRZ = RecoDecay::dotProd(std::array{lt, lz}, std::array{pt, pz}) / (RecoDecay::sqrtSumOfSquares(lt, lz) * RecoDecay::sqrtSumOfSquares(pt, pz));
-    if (cospaRZ < -1.) {
-      return -1.;
-    } else if (cospaRZ > 1.) {
-      return 1.;
+    if (cospaRZ < -1.f) {
+      return -1.f;
+    } else if (cospaRZ > 1.f) {
+      return 1.f;
     }
     return cospaRZ;
   }
 
-  template <typename TTrack, typename TShiftedTrack, typename TKFParticle>
+  template <bool isMC, typename TTrack, typename TShiftedTrack, typename TKFParticle>
   void fillTrackTable(TTrack const& track, TShiftedTrack const& shiftedtrack, TKFParticle const& kfp, const float dcaXY, const float dcaZ)
   {
+    float mcTunedTPCSignal = 0.f;
+    if constexpr (isMC) {
+      mcTunedTPCSignal = track.mcTunedTPCSignal();
+    }
+
     v0legs(track.collisionId(), track.globalIndex(), track.sign(),
            kfp.GetPx(), kfp.GetPy(), kfp.GetPz(), dcaXY, dcaZ,
            track.tpcNClsFindable(), track.tpcNClsFindableMinusFound(), track.tpcNClsFindableMinusCrossedRows(), track.tpcNClsShared(),
            track.tpcChi2NCl(), track.tpcInnerParam(), track.tpcSignal(),
            track.tpcNSigmaEl(), track.tpcNSigmaPi(),
-           track.itsClusterSizes(), track.itsChi2NCl(), track.detectorMap(),
-           shiftedtrack.getX(), shiftedtrack.getY(), shiftedtrack.getZ(), shiftedtrack.getTgl());
+           track.itsClusterSizes(), track.itsChi2NCl(), track.detectorMap(), mcTunedTPCSignal,
+           shiftedtrack.getX(), shiftedtrack.getY(), shiftedtrack.getZ());
   }
 
   template <bool isMC, class TBCs, class TCollisions, class TTracks, typename TV0>
@@ -412,7 +422,7 @@ struct PhotonConversionBuilder {
     // }
 
     // Calculate DCA with respect to the collision associated to the v0, not individual tracks
-    gpu::gpustd::array<float, 2> dcaInfo;
+    std::array<float, 2> dcaInfo;
 
     auto pTrack = getTrackParCov(pos);
     if (moveTPCTracks && isTPConlyTrack(pos) && !mVDriftMgr.moveTPCTrack<TBCs, TCollisions>(collision, pos, pTrack)) {
@@ -594,6 +604,11 @@ struct PhotonConversionBuilder {
       return;
     }
 
+    float chi2kf = gammaKF_DecayVtx.GetChi2() / gammaKF_DecayVtx.GetNDF();
+    if (chi2kf > 6e+3) { // protection for uint16.
+      return;
+    }
+
     // calculate DCAxy,z to PV
     float v0mom = RecoDecay::sqrtSumOfSquares(gammaKF_DecayVtx.GetPx(), gammaKF_DecayVtx.GetPy(), gammaKF_DecayVtx.GetPz());
     float length = RecoDecay::sqrtSumOfSquares(gammaKF_DecayVtx.GetX() - collision.posX(), gammaKF_DecayVtx.GetY() - collision.posY(), gammaKF_DecayVtx.GetZ() - collision.posZ());
@@ -634,8 +649,6 @@ struct PhotonConversionBuilder {
       registry.fill(HIST("V0/hCosPAXY_Rxy"), rxy, cospaXY_kf);
       registry.fill(HIST("V0/hCosPARZ_Rxy"), rxy, cospaRZ_kf);
 
-      float chi2kf = gammaKF_DecayVtx.GetChi2() / gammaKF_DecayVtx.GetNDF();
-
       for (auto& leg : {kfp_pos_DecayVtx, kfp_ele_DecayVtx}) {
         float legpt = RecoDecay::sqrtSumOfSquares(leg.GetPx(), leg.GetPy());
         float legeta = RecoDecay::eta(std::array{leg.GetPx(), leg.GetPy(), leg.GetPz()});
@@ -647,8 +660,10 @@ struct PhotonConversionBuilder {
         registry.fill(HIST("V0Leg/hdEdx_Pin"), leg.tpcInnerParam(), leg.tpcSignal());
         registry.fill(HIST("V0Leg/hTPCNsigmaEl"), leg.tpcInnerParam(), leg.tpcNSigmaEl());
       } // end of leg loop
-      registry.fill(HIST("V0Leg/hXZ"), pTrack.getZ(), pTrack.getX());
-      registry.fill(HIST("V0Leg/hXZ"), nTrack.getZ(), nTrack.getX());
+      for (auto& leg : {pTrack, nTrack}) {
+        registry.fill(HIST("V0Leg/hXZ"), leg.getZ(), leg.getX());
+        registry.fill(HIST("V0Leg/hRelDeltaPt"), leg.getPt(), leg.getPt() * std::sqrt(leg.getSigma1Pt2()));
+      } // end of leg loop
       registry.fill(HIST("V0Leg/hDCAxyz"), posdcaXY, posdcaZ);
       registry.fill(HIST("V0Leg/hDCAxyz"), eledcaXY, eledcaZ);
 
@@ -661,12 +676,13 @@ struct PhotonConversionBuilder {
                   gammaKF_DecayVtx.GetX(), gammaKF_DecayVtx.GetY(), gammaKF_DecayVtx.GetZ(),
                   gammaKF_PV.GetPx(), gammaKF_PV.GetPy(), gammaKF_PV.GetPz(),
                   v0_sv.M(), dca_xy_v0_to_pv, dca_z_v0_to_pv,
-                  cospa_kf, pca_kf, alpha, qt, chi2kf);
+                  cospa_kf, cospaXY_kf, cospaRZ_kf,
+                  pca_kf, alpha, qt, chi2kf);
 
-      v0photonskfcov(gammaKF_PV.GetCovariance(9), gammaKF_PV.GetCovariance(14), gammaKF_PV.GetCovariance(20), gammaKF_PV.GetCovariance(13), gammaKF_PV.GetCovariance(19), gammaKF_PV.GetCovariance(18));
+      // v0photonskfcov(gammaKF_PV.GetCovariance(9), gammaKF_PV.GetCovariance(14), gammaKF_PV.GetCovariance(20), gammaKF_PV.GetCovariance(13), gammaKF_PV.GetCovariance(19), gammaKF_PV.GetCovariance(18));
 
-      fillTrackTable(pos, pTrack, kfp_pos_DecayVtx, posdcaXY, posdcaZ); // positive leg first
-      fillTrackTable(ele, nTrack, kfp_ele_DecayVtx, eledcaXY, eledcaZ); // negative leg second
+      fillTrackTable<isMC>(pos, pTrack, kfp_pos_DecayVtx, posdcaXY, posdcaZ); // positive leg first
+      fillTrackTable<isMC>(ele, nTrack, kfp_ele_DecayVtx, eledcaXY, eledcaZ); // negative leg second
     } // end of fill table
   }
 
@@ -687,10 +703,8 @@ struct PhotonConversionBuilder {
         }
       }
 
-      if constexpr (enableFilter) {
-        if (!collision.isSelected()) {
-          continue;
-        }
+      if (!collision.isSelected()) {
+        continue;
       }
 
       if constexpr (isTriggerAnalysis) {
@@ -704,10 +718,6 @@ struct PhotonConversionBuilder {
       const auto& bc = collision.template foundBC_as<aod::BCsWithTimestamps>();
       initCCDB(bc);
       registry.fill(HIST("hCollisionCounter"), 1);
-
-      if (applyEveSel_at_skimming && (!collision.selection_bit(o2::aod::evsel::kIsTriggerTVX) || !collision.selection_bit(o2::aod::evsel::kNoTimeFrameBorder) || !collision.selection_bit(o2::aod::evsel::kNoITSROFrameBorder))) {
-        continue;
-      }
 
       updateCCDB(bc); // delay update until is needed
 
@@ -799,7 +809,7 @@ struct PhotonConversionBuilder {
           continue;
         }
       }
-      events_ngpcm(nv0_map[collision.globalIndex()]);
+      // events_ngpcm(nv0_map[collision.globalIndex()]);
     } // end of collision loop
 
     pca_map.clear();
@@ -833,13 +843,13 @@ struct PhotonConversionBuilder {
   }
   PROCESS_SWITCH(PhotonConversionBuilder, processMC, "process reconstructed info for MC", false);
 
-  void processRec_OnlyIfDielectron(soa::Join<MyCollisions, aod::EMEvSels, aod::EMEventsNee> const& collisions, filteredV0s const& v0s, MyTracksIU const& tracks, aod::BCsWithTimestamps const& bcs)
+  void processRec_OnlyIfDielectron(soa::Join<MyCollisions, aod::EMEventsNee> const& collisions, filteredV0s const& v0s, MyTracksIU const& tracks, aod::BCsWithTimestamps const& bcs)
   {
     build<false, false, true>(collisions, v0s, tracks, bcs);
   }
   PROCESS_SWITCH(PhotonConversionBuilder, processRec_OnlyIfDielectron, "process reconstructed info for data", false);
 
-  void processRec_SWT_OnlyIfDielectron(soa::Join<MyCollisionsWithSWT, aod::EMEvSels, aod::EMEventsNee> const& collisions, filteredV0s const& v0s, MyTracksIU const& tracks, aod::BCsWithTimestamps const& bcs)
+  void processRec_SWT_OnlyIfDielectron(soa::Join<MyCollisionsWithSWT, aod::EMEventsNee> const& collisions, filteredV0s const& v0s, MyTracksIU const& tracks, aod::BCsWithTimestamps const& bcs)
   {
     build<false, true, true>(collisions, v0s, tracks, bcs);
   }

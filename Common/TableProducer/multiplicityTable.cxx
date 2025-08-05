@@ -40,7 +40,7 @@ using namespace o2;
 using namespace o2::framework;
 using namespace o2::framework::expressions;
 
-MetadataHelper metadataInfo; // Metadata helper
+o2::common::core::MetadataHelper metadataInfo; // Metadata helper
 
 static constexpr int kFV0Mults = 0;
 static constexpr int kFT0Mults = 1;
@@ -100,6 +100,7 @@ struct MultiplicityTable {
   Produces<aod::PVMultZeqs> tablePVZeqs;        // 12
   Produces<aod::MultMCExtras> tableExtraMc;     // 13
   Produces<aod::Mult2MCExtras> tableExtraMult2MCExtras;
+  Produces<aod::MultHepMCHIs> multHepMCHIs;     // Not accounted for, produced using custom process function to avoid dependencies
   Produces<aod::MFTMults> mftMults;             // Not accounted for, produced using custom process function to avoid dependencies
   Produces<aod::MultsGlobal> multsGlobal;       // Not accounted for, produced based on process function processGlobalTrackingCounters
 
@@ -132,6 +133,7 @@ struct MultiplicityTable {
   } ccdbConfig;
 
   Configurable<bool> produceHistograms{"produceHistograms", false, {"Option to produce debug histograms"}};
+  Configurable<bool> autoSetupFromMetadata{"autoSetupFromMetadata", true, {"Autosetup the Run 2 and Run 3 processing from the metadata"}};
 
   int mRunNumber;
   bool lCalibLoaded;
@@ -152,11 +154,15 @@ struct MultiplicityTable {
   unsigned int randomSeed = 0;
   void init(InitContext& context)
   {
-    if (metadataInfo.isFullyDefined() && !doprocessRun2 && !doprocessRun3) { // Check if the metadata is initialized (only if not forced from the workflow configuration)
-      if (metadataInfo.isRun3()) {
-        doprocessRun3.value = true;
-      } else {
-        doprocessRun2.value = false;
+    // If both Run 2 and Run 3 data process flags are enabled then we check the metadata
+    if (autoSetupFromMetadata && metadataInfo.isFullyDefined()) {
+      LOG(info) << "Autosetting the processing from the metadata";
+      if (doprocessRun2 == true && doprocessRun3 == true) {
+        if (metadataInfo.isRun3()) {
+          doprocessRun2.value = false;
+        } else {
+          doprocessRun3.value = false;
+        }
       }
     }
 
@@ -222,6 +228,7 @@ struct MultiplicityTable {
     ccdb->setLocalObjectValidityChecking();
     ccdb->setFatalWhenNull(false); // don't fatal, please - exception is caught explicitly (as it should)
 
+    listCalib.setObject(new TList);
     if (!produceHistograms.value) {
       return;
     }
@@ -229,8 +236,6 @@ struct MultiplicityTable {
     histos.add("FT0C", "FT0C vs FT0C eq.", HistType::kTH2D, {{1000, 0, 1000, "FT0C multiplicity"}, {1000, 0, 1000, "FT0C multiplicity eq."}});
     histos.add("FT0CMultvsPV", "FT0C vs mult.", HistType::kTH2D, {{1000, 0, 1000, "FT0C mult."}, {100, 0, 100, "PV mult."}});
     histos.add("FT0AMultvsPV", "FT0A vs mult.", HistType::kTH2D, {{1000, 0, 1000, "FT0A mult."}, {100, 0, 100, "PV mult."}});
-
-    listCalib.setObject(new TList);
   }
 
   /// Dummy process function for BCs, needed in case both Run2 and Run3 process functions are disabled
@@ -730,6 +735,18 @@ struct MultiplicityTable {
   using Run3Tracks = soa::Join<aod::Tracks, aod::TracksExtra, aod::TrackSelection>;
   Partition<Run3Tracks> pvContribGlobalTracksEta1 = (minPtGlobalTrack < aod::track::pt && aod::track::pt < maxPtGlobalTrack) && (nabs(aod::track::eta) < 1.0f) && ((aod::track::flags & static_cast<uint32_t>(o2::aod::track::PVContributor)) == static_cast<uint32_t>(o2::aod::track::PVContributor)) && requireQualityTracksInFilter();
 
+  void processHepMCHeavyIons(aod::HepMCHeavyIons const& hepmchis)
+  {
+    for (auto const& hepmchi : hepmchis) {
+      multHepMCHIs(hepmchi.mcCollisionId(),
+                   hepmchi.ncollHard(),
+                   hepmchi.npartProj(),
+                   hepmchi.npartTarg(),
+                   hepmchi.ncoll(),
+                   hepmchi.impactParameter());
+    }
+  }
+
   void processGlobalTrackingCounters(aod::Collision const& collision, soa::Join<Run3TracksIU, aod::TrackSelection, aod::TrackSelectionExtension> const& tracksIU, Run3Tracks const&)
   {
     // counter from Igor
@@ -799,11 +816,12 @@ struct MultiplicityTable {
   }
 
   // Process switches
-  PROCESS_SWITCH(MultiplicityTable, processRun2, "Produce Run 2 multiplicity tables", false);
-  PROCESS_SWITCH(MultiplicityTable, processRun3, "Produce Run 3 multiplicity tables", true);
+  PROCESS_SWITCH(MultiplicityTable, processRun2, "Produce Run 2 multiplicity tables. Autoset if both processRun2 and processRun3 are enabled", true);
+  PROCESS_SWITCH(MultiplicityTable, processRun3, "Produce Run 3 multiplicity tables. Autoset if both processRun2 and processRun3 are enabled", true);
   PROCESS_SWITCH(MultiplicityTable, processGlobalTrackingCounters, "Produce Run 3 global counters", false);
   PROCESS_SWITCH(MultiplicityTable, processMC, "Produce MC multiplicity tables", false);
   PROCESS_SWITCH(MultiplicityTable, processMC2Mults, "Produce MC -> Mult map", false);
+  PROCESS_SWITCH(MultiplicityTable, processHepMCHeavyIons, "Produce MultHepMCHIs tables", false);
   PROCESS_SWITCH(MultiplicityTable, processRun3MFT, "Produce MFT mult tables", false);
 };
 

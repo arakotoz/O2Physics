@@ -19,45 +19,47 @@
 #ifndef PWGEM_PHOTONMESON_CORE_PI0ETATOGAMMAGAMMA_H_
 #define PWGEM_PHOTONMESON_CORE_PI0ETATOGAMMAGAMMA_H_
 
-#include <cstring>
-#include <iterator>
-#include <string>
-#include <map>
-#include <vector>
-#include <tuple>
-#include <utility>
-#include <array>
-
-#include "TString.h"
-#include "Math/Vector4D.h"
-#include "Math/Vector3D.h"
-#include "Math/LorentzRotation.h"
-#include "Math/Rotation3D.h"
-#include "Math/AxisAngle.h"
-#include "Framework/runDataProcessing.h"
-#include "Framework/AnalysisTask.h"
-#include "Framework/AnalysisDataModel.h"
-#include "Framework/ASoAHelpers.h"
-
-#include "DetectorsBase/GeometryManager.h"
-#include "EMCALBase/Geometry.h"
-#include "DataFormatsParameters/GRPObject.h"
-#include "DataFormatsParameters/GRPMagField.h"
-#include "CCDB/BasicCCDBManager.h"
-
-#include "Common/Core/RecoDecay.h"
-#include "PWGEM/PhotonMeson/DataModel/gammaTables.h"
-#include "PWGEM/PhotonMeson/Core/V0PhotonCut.h"
+#include "PWGEM/Dilepton/Utils/EMTrack.h"
+#include "PWGEM/Dilepton/Utils/EMTrackUtilities.h"
+#include "PWGEM/Dilepton/Utils/EventMixingHandler.h"
 #include "PWGEM/PhotonMeson/Core/DalitzEECut.h"
-#include "PWGEM/PhotonMeson/Core/PHOSPhotonCut.h"
 #include "PWGEM/PhotonMeson/Core/EMCPhotonCut.h"
 #include "PWGEM/PhotonMeson/Core/EMPhotonEventCut.h"
-#include "PWGEM/PhotonMeson/Utils/PairUtilities.h"
-#include "PWGEM/Dilepton/Utils/EMTrack.h"
-#include "PWGEM/Dilepton/Utils/EventMixingHandler.h"
+#include "PWGEM/PhotonMeson/Core/PHOSPhotonCut.h"
+#include "PWGEM/PhotonMeson/Core/V0PhotonCut.h"
+#include "PWGEM/PhotonMeson/DataModel/gammaTables.h"
 #include "PWGEM/PhotonMeson/Utils/EventHistograms.h"
 #include "PWGEM/PhotonMeson/Utils/NMHistograms.h"
-#include "PWGEM/Dilepton/Utils/EMTrackUtilities.h"
+#include "PWGEM/PhotonMeson/Utils/PairUtilities.h"
+
+#include "Common/Core/RecoDecay.h"
+
+#include "CCDB/BasicCCDBManager.h"
+#include "DataFormatsParameters/GRPMagField.h"
+#include "DataFormatsParameters/GRPObject.h"
+#include "DetectorsBase/GeometryManager.h"
+#include "EMCALBase/Geometry.h"
+#include "Framework/ASoAHelpers.h"
+#include "Framework/AnalysisDataModel.h"
+#include "Framework/AnalysisTask.h"
+#include "Framework/runDataProcessing.h"
+
+#include "Math/AxisAngle.h"
+#include "Math/LorentzRotation.h"
+#include "Math/Rotation3D.h"
+#include "Math/Vector3D.h"
+#include "Math/Vector4D.h"
+#include "TString.h"
+
+#include <algorithm>
+#include <array>
+#include <cstring>
+#include <iterator>
+#include <map>
+#include <string>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 using namespace o2;
 using namespace o2::aod;
@@ -69,8 +71,11 @@ using namespace o2::aod::pwgem::photon;
 using namespace o2::aod::pwgem::dilepton::utils::emtrackutil;
 using namespace o2::aod::pwgem::dilepton::utils;
 
-using MyCollisions = soa::Join<aod::EMEvents, aod::EMEventsMult, aod::EMEventsCent, aod::EMEventsQvec, aod::EMEventsWeight>;
+using MyCollisions = soa::Join<aod::EMEvents, aod::EMEventsMult, aod::EMEventsCent, aod::EMEventsQvec>;
 using MyCollision = MyCollisions::iterator;
+
+using MyCollisionsWithJJMC = soa::Join<MyCollisions, aod::EMEventsWeight>;
+using MyCollisionWithJJMC = MyCollisionsWithJJMC::iterator;
 
 using MyV0Photons = soa::Filtered<soa::Join<aod::V0PhotonsKF, aod::V0KFEMEventIds, aod::V0PhotonsKFPrefilterBitDerived>>;
 using MyV0Photon = MyV0Photons::iterator;
@@ -91,6 +96,7 @@ struct Pi0EtaToGammaGamma {
   Configurable<std::string> grpmagPath{"grpmagPath", "GLO/Config/GRPMagField", "CCDB path of the GRPMagField object"};
   Configurable<bool> skipGRPOquery{"skipGRPOquery", true, "skip grpo query"};
   Configurable<float> d_bz_input{"d_bz_input", -999, "bz field in kG, -999 is automatic"};
+  Configurable<uint64_t> ndiff_bc_mix{"ndiff_bc_mix", 198, "difference in global BC required in mixed events"};
 
   Configurable<int> cfgQvecEstimator{"cfgQvecEstimator", 0, "FT0M:0, FT0A:1, FT0C:2"};
   Configurable<int> cfgCentEstimator{"cfgCentEstimator", 2, "FT0M:0, FT0A:1, FT0C:2"};
@@ -131,7 +137,6 @@ struct Pi0EtaToGammaGamma {
     Configurable<bool> cfg_require_v0_with_itstpc{"cfg_require_v0_with_itstpc", false, "flag to select V0s with ITS-TPC matched tracks"};
     Configurable<bool> cfg_require_v0_with_itsonly{"cfg_require_v0_with_itsonly", false, "flag to select V0s with ITSonly tracks"};
     Configurable<bool> cfg_require_v0_with_tpconly{"cfg_require_v0_with_tpconly", false, "flag to select V0s with TPConly tracks"};
-    Configurable<bool> cfg_require_v0_on_wwire_ib{"cfg_require_v0_on_wwire_ib", false, "flag to select V0s on W wires ITSib"};
     Configurable<float> cfg_min_pt_v0{"cfg_min_pt_v0", 0.1, "min pT for v0 photons at PV"};
     Configurable<float> cfg_max_pt_v0{"cfg_max_pt_v0", 1e+10, "max pT for v0 photons at PV"};
     Configurable<float> cfg_min_eta_v0{"cfg_min_eta_v0", -0.8, "min eta for v0 photons at PV"};
@@ -140,17 +145,18 @@ struct Pi0EtaToGammaGamma {
     Configurable<float> cfg_max_v0radius{"cfg_max_v0radius", 90.0, "max v0 radius"};
     Configurable<float> cfg_max_alpha_ap{"cfg_max_alpha_ap", 0.95, "max alpha for AP cut"};
     Configurable<float> cfg_max_qt_ap{"cfg_max_qt_ap", 0.01, "max qT for AP cut"};
-    Configurable<float> cfg_min_cospa{"cfg_min_cospa", 0.997, "min V0 CosPA"};
-    Configurable<float> cfg_max_pca{"cfg_max_pca", 3.0, "max distance btween 2 legs"};
+    Configurable<float> cfg_min_cospa{"cfg_min_cospa", 0.999, "min V0 CosPA"};
+    Configurable<float> cfg_max_pca{"cfg_max_pca", 1.5, "max distance btween 2 legs"};
     Configurable<float> cfg_max_chi2kf{"cfg_max_chi2kf", 1e+10, "max chi2/ndf with KF"};
-    Configurable<bool> cfg_require_v0_with_correct_xz{"cfg_require_v0_with_correct_xz", true, "flag to select V0s with correct xz"};
+    Configurable<bool> cfg_require_v0_with_correct_xz{"cfg_require_v0_with_correct_xz", false, "flag to select V0s with correct xz"};
     Configurable<bool> cfg_reject_v0_on_itsib{"cfg_reject_v0_on_itsib", true, "flag to reject V0s on ITSib"};
     Configurable<bool> cfg_apply_cuts_from_prefilter_derived{"cfg_apply_cuts_from_prefilter_derived", false, "flag to apply prefilter to V0"};
 
-    Configurable<int> cfg_min_ncluster_tpc{"cfg_min_ncluster_tpc", 10, "min ncluster tpc"};
+    Configurable<int> cfg_min_ncluster_tpc{"cfg_min_ncluster_tpc", 0, "min ncluster tpc"};
     Configurable<int> cfg_min_ncrossedrows{"cfg_min_ncrossedrows", 40, "min ncrossed rows"};
+    Configurable<float> cfg_max_frac_shared_clusters_tpc{"cfg_max_frac_shared_clusters_tpc", 999.f, "max fraction of shared clusters in TPC"};
     Configurable<float> cfg_max_chi2tpc{"cfg_max_chi2tpc", 4.0, "max chi2/NclsTPC"};
-    Configurable<float> cfg_max_chi2its{"cfg_max_chi2its", 5.0, "max chi2/NclsITS"};
+    Configurable<float> cfg_max_chi2its{"cfg_max_chi2its", 36.0, "max chi2/NclsITS"};
     Configurable<float> cfg_min_TPCNsigmaEl{"cfg_min_TPCNsigmaEl", -3.0, "min. TPC n sigma for electron"};
     Configurable<float> cfg_max_TPCNsigmaEl{"cfg_max_TPCNsigmaEl", +3.0, "max. TPC n sigma for electron"};
     Configurable<bool> cfg_disable_itsonly_track{"cfg_disable_itsonly_track", false, "flag to disable ITSonly tracks"};
@@ -174,16 +180,22 @@ struct Pi0EtaToGammaGamma {
     Configurable<int> cfg_min_ncluster_its{"cfg_min_ncluster_its", 5, "min ncluster its"};
     Configurable<int> cfg_min_ncrossedrows{"cfg_min_ncrossedrows", 70, "min ncrossed rows"};
     Configurable<float> cfg_max_chi2tpc{"cfg_max_chi2tpc", 4.0, "max chi2/NclsTPC"};
-    Configurable<float> cfg_max_chi2its{"cfg_max_chi2its", 5.0, "max chi2/NclsITS"};
+    Configurable<float> cfg_max_chi2its{"cfg_max_chi2its", 36.0, "max chi2/NclsITS"};
     Configurable<float> cfg_max_dcaxy{"cfg_max_dcaxy", 0.05, "max dca XY for single track in cm"};
     Configurable<float> cfg_max_dcaz{"cfg_max_dcaz", 0.05, "max dca Z for single track in cm"};
+    Configurable<float> cfg_max_dca3dsigma_track{"cfg_max_dca3dsigma_track", 1.5, "max DCA 3D in sigma"};
+    Configurable<float> cfg_max_frac_shared_clusters_tpc{"cfg_max_frac_shared_clusters_tpc", 999.f, "max fraction of shared clusters in TPC"};
     Configurable<bool> cfg_apply_cuts_from_prefilter_derived{"cfg_apply_cuts_from_prefilter_derived", false, "flag to apply prefilter to electron"};
+    Configurable<bool> includeITSsa{"includeITSsa", false, "Flag to enable ITSsa tracks"};
+    Configurable<float> cfg_max_pt_track_ITSsa{"cfg_max_pt_track_ITSsa", 0.15, "max pt for ITSsa tracks"};
 
     Configurable<int> cfg_pid_scheme{"cfg_pid_scheme", static_cast<int>(DalitzEECut::PIDSchemes::kTOFif), "pid scheme [kTOFif : 0, kTPConly : 1]"};
     Configurable<float> cfg_min_TPCNsigmaEl{"cfg_min_TPCNsigmaEl", -2.0, "min. TPC n sigma for electron inclusion"};
     Configurable<float> cfg_max_TPCNsigmaEl{"cfg_max_TPCNsigmaEl", +3.0, "max. TPC n sigma for electron inclusion"};
-    Configurable<float> cfg_min_TPCNsigmaPi{"cfg_min_TPCNsigmaPi", -3.0, "min. TPC n sigma for pion exclusion"};
-    Configurable<float> cfg_max_TPCNsigmaPi{"cfg_max_TPCNsigmaPi", +3.0, "max. TPC n sigma for pion exclusion"};
+    Configurable<float> cfg_min_TPCNsigmaPi{"cfg_min_TPCNsigmaPi", -0.0, "min. TPC n sigma for pion exclusion"};
+    Configurable<float> cfg_max_TPCNsigmaPi{"cfg_max_TPCNsigmaPi", +0.0, "max. TPC n sigma for pion exclusion"};
+    Configurable<float> cfg_min_TOFNsigmaEl{"cfg_min_TOFNsigmaEl", -3.0, "min. TOF n sigma for electron inclusion"};
+    Configurable<float> cfg_max_TOFNsigmaEl{"cfg_max_TOFNsigmaEl", +3.0, "max. TOF n sigma for electron inclusion"};
   } dileptoncuts;
 
   EMCPhotonCut fEMCCut;
@@ -246,8 +258,6 @@ struct Pi0EtaToGammaGamma {
     o2::aod::pwgem::photonmeson::utils::eventhistogram::addEventHistograms(&fRegistry);
     if constexpr (pairtype == PairType::kPCMDalitzEE) {
       o2::aod::pwgem::photonmeson::utils::nmhistogram::addNMHistograms(&fRegistry, false, "ee#gamma");
-    } else if constexpr (pairtype == PairType::kPCMDalitzMuMu) {
-      o2::aod::pwgem::photonmeson::utils::nmhistogram::addNMHistograms(&fRegistry, false, "#mu#mu#gamma");
     } else {
       o2::aod::pwgem::photonmeson::utils::nmhistogram::addNMHistograms(&fRegistry, false, "#gamma#gamma");
     }
@@ -261,6 +271,7 @@ struct Pi0EtaToGammaGamma {
       fRegistry.addClone("Pair/same/", "Pair/rotation/");
       emcalGeom = o2::emcal::Geometry::GetInstanceFromRunNumber(300000);
     }
+    fRegistry.add("Pair/mix/hDiffBC", "diff. global BC in mixed event;|BC_{current} - BC_{mixed}|", kTH1D, {{10001, -0.5, 10000.5}}, true);
 
     mRunNumber = 0;
     d_bz = 0;
@@ -321,6 +332,7 @@ struct Pi0EtaToGammaGamma {
     used_photonIds.shrink_to_fit();
     used_dileptonIds.clear();
     used_dileptonIds.shrink_to_fit();
+    map_mixed_eventId_to_globalBC.clear();
   }
 
   void DefineEMEventCut()
@@ -353,46 +365,21 @@ struct Pi0EtaToGammaGamma {
     fV0PhotonCut.RejectITSib(pcmcuts.cfg_reject_v0_on_itsib);
 
     // for track
-    fV0PhotonCut.SetTrackPtRange(pcmcuts.cfg_min_pt_v0 * 0.5, 1e+10f);
-    fV0PhotonCut.SetTrackEtaRange(-pcmcuts.cfg_max_eta_v0, +pcmcuts.cfg_max_eta_v0);
     fV0PhotonCut.SetMinNClustersTPC(pcmcuts.cfg_min_ncluster_tpc);
     fV0PhotonCut.SetMinNCrossedRowsTPC(pcmcuts.cfg_min_ncrossedrows);
     fV0PhotonCut.SetMinNCrossedRowsOverFindableClustersTPC(0.8);
+    fV0PhotonCut.SetMaxFracSharedClustersTPC(pcmcuts.cfg_max_frac_shared_clusters_tpc);
     fV0PhotonCut.SetChi2PerClusterTPC(0.0, pcmcuts.cfg_max_chi2tpc);
     fV0PhotonCut.SetTPCNsigmaElRange(pcmcuts.cfg_min_TPCNsigmaEl, pcmcuts.cfg_max_TPCNsigmaEl);
     fV0PhotonCut.SetChi2PerClusterITS(-1e+10, pcmcuts.cfg_max_chi2its);
-    fV0PhotonCut.SetDisableITSonly(pcmcuts.cfg_disable_itsonly_track);
-    fV0PhotonCut.SetDisableTPConly(pcmcuts.cfg_disable_tpconly_track);
-
-    if (pcmcuts.cfg_reject_v0_on_itsib) {
-      fV0PhotonCut.SetNClustersITS(2, 4);
-    } else {
-      fV0PhotonCut.SetNClustersITS(0, 7);
-    }
+    fV0PhotonCut.SetNClustersITS(0, 7);
     fV0PhotonCut.SetMeanClusterSizeITSob(0.0, 16.0);
     fV0PhotonCut.SetIsWithinBeamPipe(pcmcuts.cfg_require_v0_with_correct_xz);
-
-    if (pcmcuts.cfg_require_v0_with_itstpc) {
-      fV0PhotonCut.SetRequireITSTPC(true);
-      fV0PhotonCut.SetMaxPCA(1.0);
-      fV0PhotonCut.SetRxyRange(4, 40);
-    }
-    if (pcmcuts.cfg_require_v0_with_itsonly) {
-      fV0PhotonCut.SetRequireITSonly(true);
-      fV0PhotonCut.SetMaxPCA(1.0);
-      fV0PhotonCut.SetRxyRange(4, 24);
-    }
-    if (pcmcuts.cfg_require_v0_with_tpconly) {
-      fV0PhotonCut.SetRequireTPConly(true);
-      fV0PhotonCut.SetMaxPCA(3.0);
-      fV0PhotonCut.SetRxyRange(36, 90);
-    }
-    if (pcmcuts.cfg_require_v0_on_wwire_ib) {
-      fV0PhotonCut.SetMaxPCA(0.3);
-      fV0PhotonCut.SetOnWwireIB(true);
-      fV0PhotonCut.SetOnWwireOB(false);
-      fV0PhotonCut.SetRxyRange(7, 14);
-    }
+    fV0PhotonCut.SetDisableITSonly(pcmcuts.cfg_disable_itsonly_track);
+    fV0PhotonCut.SetDisableTPConly(pcmcuts.cfg_disable_tpconly_track);
+    fV0PhotonCut.SetRequireITSTPC(pcmcuts.cfg_require_v0_with_itstpc);
+    fV0PhotonCut.SetRequireITSonly(pcmcuts.cfg_require_v0_with_itsonly);
+    fV0PhotonCut.SetRequireTPConly(pcmcuts.cfg_require_v0_with_tpconly);
   }
 
   void DefineDileptonCut()
@@ -412,16 +399,20 @@ struct Pi0EtaToGammaGamma {
     fDileptonCut.SetMinNClustersTPC(dileptoncuts.cfg_min_ncluster_tpc);
     fDileptonCut.SetMinNCrossedRowsTPC(dileptoncuts.cfg_min_ncrossedrows);
     fDileptonCut.SetMinNCrossedRowsOverFindableClustersTPC(0.8);
+    fDileptonCut.SetMaxFracSharedClustersTPC(dileptoncuts.cfg_max_frac_shared_clusters_tpc);
     fDileptonCut.SetChi2PerClusterTPC(0.0, dileptoncuts.cfg_max_chi2tpc);
     fDileptonCut.SetChi2PerClusterITS(0.0, dileptoncuts.cfg_max_chi2its);
     fDileptonCut.SetNClustersITS(dileptoncuts.cfg_min_ncluster_its, 7);
     fDileptonCut.SetMaxDcaXY(dileptoncuts.cfg_max_dcaxy);
     fDileptonCut.SetMaxDcaZ(dileptoncuts.cfg_max_dcaz);
+    fDileptonCut.SetTrackDca3DRange(0.f, dileptoncuts.cfg_max_dca3dsigma_track); // in sigma
+    fDileptonCut.IncludeITSsa(dileptoncuts.includeITSsa, dileptoncuts.cfg_max_pt_track_ITSsa);
 
     // for eID
     fDileptonCut.SetPIDScheme(dileptoncuts.cfg_pid_scheme);
     fDileptonCut.SetTPCNsigmaElRange(dileptoncuts.cfg_min_TPCNsigmaEl, dileptoncuts.cfg_max_TPCNsigmaEl);
     fDileptonCut.SetTPCNsigmaPiRange(dileptoncuts.cfg_min_TPCNsigmaPi, dileptoncuts.cfg_max_TPCNsigmaPi);
+    fDileptonCut.SetTOFNsigmaElRange(dileptoncuts.cfg_min_TOFNsigmaEl, dileptoncuts.cfg_max_TOFNsigmaEl);
   }
 
   void DefineEMCCut()
@@ -560,14 +551,15 @@ struct Pi0EtaToGammaGamma {
   Preslice<MyPHOSClusters> perCollision_phos = aod::phoscluster::emeventId;
 
   Preslice<MyPrimaryElectrons> perCollision_electron = aod::emprimaryelectron::emeventId;
-  Partition<MyPrimaryElectrons> positrons = o2::aod::emprimaryelectron::sign > int8_t(0) && static_cast<float>(dileptoncuts.cfg_min_pt_track) < o2::aod::track::pt&& nabs(o2::aod::track::eta) < static_cast<float>(dileptoncuts.cfg_max_eta_track) && static_cast<float>(dileptoncuts.cfg_min_TPCNsigmaEl) < o2::aod::pidtpc::tpcNSigmaEl&& o2::aod::pidtpc::tpcNSigmaEl < static_cast<float>(dileptoncuts.cfg_max_TPCNsigmaEl);
-  Partition<MyPrimaryElectrons> electrons = o2::aod::emprimaryelectron::sign < int8_t(0) && static_cast<float>(dileptoncuts.cfg_min_pt_track) < o2::aod::track::pt && nabs(o2::aod::track::eta) < static_cast<float>(dileptoncuts.cfg_max_eta_track) && static_cast<float>(dileptoncuts.cfg_min_TPCNsigmaEl) < o2::aod::pidtpc::tpcNSigmaEl && o2::aod::pidtpc::tpcNSigmaEl < static_cast<float>(dileptoncuts.cfg_max_TPCNsigmaEl);
+  Partition<MyPrimaryElectrons> positrons = o2::aod::emprimaryelectron::sign > int8_t(0) && dileptoncuts.cfg_min_pt_track < o2::aod::track::pt&& nabs(o2::aod::track::eta) < dileptoncuts.cfg_max_eta_track;
+  Partition<MyPrimaryElectrons> electrons = o2::aod::emprimaryelectron::sign < int8_t(0) && dileptoncuts.cfg_min_pt_track < o2::aod::track::pt && nabs(o2::aod::track::eta) < dileptoncuts.cfg_max_eta_track;
 
   using MyEMH = o2::aod::pwgem::dilepton::utils::EventMixingHandler<std::tuple<int, int, int, int>, std::pair<int, int>, EMTrack>;
   MyEMH* emh1 = nullptr;
   MyEMH* emh2 = nullptr;
   std::vector<std::pair<int, int>> used_photonIds;              // <ndf, trackId>
   std::vector<std::tuple<int, int, int, int>> used_dileptonIds; // <ndf, trackId>
+  std::map<std::pair<int, int>, uint64_t> map_mixed_eventId_to_globalBC;
 
   template <typename TCollisions, typename TPhotons1, typename TPhotons2, typename TSubInfos1, typename TSubInfos2, typename TPreslice1, typename TPreslice2, typename TCut1, typename TCut2>
   void runPairing(TCollisions const& collisions,
@@ -583,7 +575,12 @@ struct Pi0EtaToGammaGamma {
         continue;
       }
 
-      if (eventcuts.onlyKeepWeightedEvents && std::fabs(collision.weight() - 1.) < 1E-10) {
+      float weight = 1.f;
+      if constexpr (std::is_same_v<std::decay_t<TCollisions>, FilteredMyCollisionsWithJJMC>) {
+        weight = collision.weight();
+      }
+
+      if (eventcuts.onlyKeepWeightedEvents && std::fabs(weight - 1.f) < 1E-10) {
         continue;
       }
 
@@ -592,13 +589,13 @@ struct Pi0EtaToGammaGamma {
         continue;
       }
 
-      o2::aod::pwgem::photonmeson::utils::eventhistogram::fillEventInfo<0>(&fRegistry, collision, collision.weight());
+      o2::aod::pwgem::photonmeson::utils::eventhistogram::fillEventInfo<0>(&fRegistry, collision, weight);
       if (!fEMEventCut.IsSelected(collision)) {
         continue;
       }
-      o2::aod::pwgem::photonmeson::utils::eventhistogram::fillEventInfo<1>(&fRegistry, collision, collision.weight());
-      fRegistry.fill(HIST("Event/before/hCollisionCounter"), 12.0, collision.weight()); // accepted
-      fRegistry.fill(HIST("Event/after/hCollisionCounter"), 12.0, collision.weight());  // accepted
+      o2::aod::pwgem::photonmeson::utils::eventhistogram::fillEventInfo<1>(&fRegistry, collision, weight);
+      fRegistry.fill(HIST("Event/before/hCollisionCounter"), 12.0, weight); // accepted
+      fRegistry.fill(HIST("Event/after/hCollisionCounter"), 12.0, weight);  // accepted
 
       int zbin = lower_bound(zvtx_bin_edges.begin(), zvtx_bin_edges.end(), collision.posZ()) - zvtx_bin_edges.begin() - 1;
       if (zbin < 0) {
@@ -666,10 +663,10 @@ struct Pi0EtaToGammaGamma {
             }
           }
 
-          fRegistry.fill(HIST("Pair/same/hs"), v12.M(), v12.Pt(), collision.weight());
+          fRegistry.fill(HIST("Pair/same/hs"), v12.M(), v12.Pt(), weight);
 
           if constexpr (pairtype == PairType::kEMCEMC) {
-            RotationBackground<MyEMCClusters>(v12, v1, v2, photons2_per_collision, g1.globalIndex(), g2.globalIndex(), collision.weight());
+            RotationBackground<MyEMCClusters>(v12, v1, v2, photons2_per_collision, g1.globalIndex(), g2.globalIndex(), weight);
           }
 
           std::pair<int, int> pair_tmp_id1 = std::make_pair(ndf, g1.globalIndex());
@@ -723,7 +720,7 @@ struct Pi0EtaToGammaGamma {
               continue;
             }
 
-            fRegistry.fill(HIST("Pair/same/hs"), veeg.M(), veeg.Pt(), collision.weight());
+            fRegistry.fill(HIST("Pair/same/hs"), veeg.M(), veeg.Pt(), weight);
 
             std::pair<int, int> pair_tmp_id1 = std::make_pair(ndf, g1.globalIndex());
             std::tuple<int, int, int, int> tuple_tmp_id2 = std::make_tuple(ndf, collision.globalIndex(), pos2.trackId(), ele2.trackId());
@@ -753,7 +750,7 @@ struct Pi0EtaToGammaGamma {
             continue;
           }
 
-          fRegistry.fill(HIST("Pair/same/hs"), v12.M(), v12.Pt(), collision.weight());
+          fRegistry.fill(HIST("Pair/same/hs"), v12.M(), v12.Pt(), weight);
 
           std::pair<int, int> pair_tmp_id1 = std::make_pair(ndf, g1.globalIndex());
           std::pair<int, int> pair_tmp_id2 = std::make_pair(ndf, g2.globalIndex());
@@ -791,6 +788,13 @@ struct Pi0EtaToGammaGamma {
             continue;
           }
 
+          auto globalBC_mix = map_mixed_eventId_to_globalBC[mix_dfId_collisionId];
+          uint64_t diffBC = std::max(collision.globalBC(), globalBC_mix) - std::min(collision.globalBC(), globalBC_mix);
+          fRegistry.fill(HIST("Pair/mix/hDiffBC"), diffBC);
+          if (diffBC < ndiff_bc_mix) {
+            continue;
+          }
+
           auto photons1_from_event_pool = emh1->GetTracksPerCollision(mix_dfId_collisionId);
           // LOGF(info, "Do event mixing: current event (%d, %d), ngamma = %d | event pool (%d, %d), ngamma = %d", ndf, collision.globalIndex(), selected_photons1_in_this_event.size(), mix_dfId, mix_collisionId, photons1_from_event_pool.size());
 
@@ -803,7 +807,7 @@ struct Pi0EtaToGammaGamma {
                 continue;
               }
 
-              fRegistry.fill(HIST("Pair/mix/hs"), v12.M(), v12.Pt(), collision.weight());
+              fRegistry.fill(HIST("Pair/mix/hs"), v12.M(), v12.Pt(), weight);
             }
           }
         } // end of loop over mixed event pool
@@ -817,6 +821,13 @@ struct Pi0EtaToGammaGamma {
             continue;
           }
 
+          auto globalBC_mix = map_mixed_eventId_to_globalBC[mix_dfId_collisionId];
+          uint64_t diffBC = std::max(collision.globalBC(), globalBC_mix) - std::min(collision.globalBC(), globalBC_mix);
+          fRegistry.fill(HIST("Pair/mix/hDiffBC"), diffBC);
+          if (diffBC < ndiff_bc_mix) {
+            continue;
+          }
+
           auto photons2_from_event_pool = emh2->GetTracksPerCollision(mix_dfId_collisionId);
           // LOGF(info, "Do event mixing: current event (%d, %d), ngamma = %d | event pool (%d, %d), nll = %d", ndf, collision.globalIndex(), selected_photons1_in_this_event.size(), mix_dfId, mix_collisionId, photons2_from_event_pool.size());
 
@@ -824,14 +835,14 @@ struct Pi0EtaToGammaGamma {
             for (const auto& g2 : photons2_from_event_pool) {
               ROOT::Math::PtEtaPhiMVector v1(g1.pt(), g1.eta(), g1.phi(), 0.);
               ROOT::Math::PtEtaPhiMVector v2(g2.pt(), g2.eta(), g2.phi(), 0.);
-              if constexpr (pairtype == PairType::kPCMDalitzEE || pairtype == PairType::kPCMDalitzMuMu) { //[photon from event1, dilepton from event2] and [photon from event2, dilepton from event1]
+              if constexpr (pairtype == PairType::kPCMDalitzEE) { //[photon from event1, dilepton from event2] and [photon from event2, dilepton from event1]
                 v2.SetM(g2.mass());
               }
               ROOT::Math::PtEtaPhiMVector v12 = v1 + v2;
               if (std::fabs(v12.Rapidity()) > maxY) {
                 continue;
               }
-              fRegistry.fill(HIST("Pair/mix/hs"), v12.M(), v12.Pt(), collision.weight());
+              fRegistry.fill(HIST("Pair/mix/hs"), v12.M(), v12.Pt(), weight);
             }
           }
         } // end of loop over mixed event pool
@@ -843,6 +854,13 @@ struct Pi0EtaToGammaGamma {
             continue;
           }
 
+          auto globalBC_mix = map_mixed_eventId_to_globalBC[mix_dfId_collisionId];
+          uint64_t diffBC = std::max(collision.globalBC(), globalBC_mix) - std::min(collision.globalBC(), globalBC_mix);
+          fRegistry.fill(HIST("Pair/mix/hDiffBC"), diffBC);
+          if (diffBC < ndiff_bc_mix) {
+            continue;
+          }
+
           auto photons1_from_event_pool = emh1->GetTracksPerCollision(mix_dfId_collisionId);
           // LOGF(info, "Do event mixing: current event (%d, %d), nll = %d | event pool (%d, %d), ngamma = %d", ndf, collision.globalIndex(), selected_photons2_in_this_event.size(), mix_dfId, mix_collisionId, photons1_from_event_pool.size());
 
@@ -850,14 +868,14 @@ struct Pi0EtaToGammaGamma {
             for (const auto& g2 : photons1_from_event_pool) {
               ROOT::Math::PtEtaPhiMVector v1(g1.pt(), g1.eta(), g1.phi(), 0.);
               ROOT::Math::PtEtaPhiMVector v2(g2.pt(), g2.eta(), g2.phi(), 0.);
-              if constexpr (pairtype == PairType::kPCMDalitzEE || pairtype == PairType::kPCMDalitzMuMu) { //[photon from event1, dilepton from event2] and [photon from event2, dilepton from event1]
+              if constexpr (pairtype == PairType::kPCMDalitzEE) { //[photon from event1, dilepton from event2] and [photon from event2, dilepton from event1]
                 v1.SetM(g1.mass());
               }
               ROOT::Math::PtEtaPhiMVector v12 = v1 + v2;
               if (std::fabs(v12.Rapidity()) > maxY) {
                 continue;
               }
-              fRegistry.fill(HIST("Pair/mix/hs"), v12.M(), v12.Pt(), collision.weight());
+              fRegistry.fill(HIST("Pair/mix/hs"), v12.M(), v12.Pt(), weight);
             }
           }
         } // end of loop over mixed event pool
@@ -866,6 +884,7 @@ struct Pi0EtaToGammaGamma {
       if (ndiphoton > 0) {
         emh1->AddCollisionIdAtLast(key_bin, key_df_collision);
         emh2->AddCollisionIdAtLast(key_bin, key_df_collision);
+        map_mixed_eventId_to_globalBC[key_df_collision] = collision.globalBC();
       }
 
     } // end of collision loop
@@ -914,9 +933,46 @@ struct Pi0EtaToGammaGamma {
     // }
     ndf++;
   }
-  PROCESS_SWITCH(Pi0EtaToGammaGamma, processAnalysis, "process pair analysis", false);
+  PROCESS_SWITCH(Pi0EtaToGammaGamma, processAnalysis, "process pair analysis", true);
+
+  using FilteredMyCollisionsWithJJMC = soa::Filtered<MyCollisionsWithJJMC>;
+  void processAnalysisJJMC(FilteredMyCollisionsWithJJMC const& collisions, Types const&... args)
+  {
+    // LOGF(info, "ndf = %d", ndf);
+    if constexpr (pairtype == PairType::kPCMPCM) {
+      auto v0photons = std::get<0>(std::tie(args...));
+      auto v0legs = std::get<1>(std::tie(args...));
+      runPairing(collisions, v0photons, v0photons, v0legs, v0legs, perCollision_pcm, perCollision_pcm, fV0PhotonCut, fV0PhotonCut);
+    } else if constexpr (pairtype == PairType::kPCMDalitzEE) {
+      auto v0photons = std::get<0>(std::tie(args...));
+      auto v0legs = std::get<1>(std::tie(args...));
+      auto emprimaryelectrons = std::get<2>(std::tie(args...));
+      // LOGF(info, "electrons.size() = %d, positrons.size() = %d", electrons.size(), positrons.size());
+      runPairing(collisions, v0photons, emprimaryelectrons, v0legs, emprimaryelectrons, perCollision_pcm, perCollision_electron, fV0PhotonCut, fDileptonCut);
+    } else if constexpr (pairtype == PairType::kEMCEMC) {
+      auto emcclusters = std::get<0>(std::tie(args...));
+      runPairing(collisions, emcclusters, emcclusters, nullptr, nullptr, perCollision_emc, perCollision_emc, fEMCCut, fEMCCut);
+    } else if constexpr (pairtype == PairType::kPHOSPHOS) {
+      auto phosclusters = std::get<0>(std::tie(args...));
+      runPairing(collisions, phosclusters, phosclusters, nullptr, nullptr, perCollision_phos, perCollision_phos, fPHOSCut, fPHOSCut);
+    }
+    // else if constexpr (pairtype == PairType::kPCMEMC) {
+    //   auto v0photons = std::get<0>(std::tie(args...));
+    //   auto v0legs = std::get<1>(std::tie(args...));
+    //   auto emcclusters = std::get<2>(std::tie(args...));
+    //   auto emcmatchedtracks = std::get<3>(std::tie(args...));
+    //   runPairing(collisions, v0photons, emcclusters, v0legs, nullptr, perCollision_pcm, perCollision_emc, fV0PhotonCut, fEMCCut, emcmatchedtracks, nullptr);
+    // } else if constexpr (pairtype == PairType::kPCMPHOS) {
+    //   auto v0photons = std::get<0>(std::tie(args...));
+    //   auto v0legs = std::get<1>(std::tie(args...));
+    //   auto phosclusters = std::get<2>(std::tie(args...));
+    //   runPairing(collisions, v0photons, phosclusters, v0legs, nullptr, perCollision_pcm, perCollision_phos, fV0PhotonCut, fPHOSCut, nullptr, nullptr);
+    // }
+    ndf++;
+  }
+  PROCESS_SWITCH(Pi0EtaToGammaGamma, processAnalysisJJMC, "process pair analysis", false);
 
   void processDummy(MyCollisions const&) {}
-  PROCESS_SWITCH(Pi0EtaToGammaGamma, processDummy, "Dummy function", true);
+  PROCESS_SWITCH(Pi0EtaToGammaGamma, processDummy, "Dummy function", false);
 };
 #endif // PWGEM_PHOTONMESON_CORE_PI0ETATOGAMMAGAMMA_H_

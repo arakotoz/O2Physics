@@ -14,28 +14,38 @@
 /// \author Rashi Gupta <rashi.gupta@cern.ch>, IIT Indore
 /// \author Ravindra Singh <ravindra.singh@cern.ch>, IIT Indore
 
-#include "THnSparse.h"
-#include "TPDGCode.h"
-
-#include "DataFormatsEMCAL/AnalysisCluster.h"
-#include "Framework/AnalysisTask.h"
-#include "Framework/HistogramRegistry.h"
-#include "Framework/runDataProcessing.h"
-
-#include "Common/Core/PID/TPCPIDResponse.h"
-#include "Common/Core/trackUtilities.h"
-#include "Common/Core/TrackSelection.h"
-#include "Common/DataModel/Centrality.h"
-#include "Common/DataModel/EventSelection.h"
-#include "Common/DataModel/Multiplicity.h"
-#include "Common/DataModel/PIDResponse.h"
-#include "Common/DataModel/TrackSelectionTables.h"
-
-#include "Tools/KFparticle/KFUtilities.h"
-
+#include "PWGHF/HFL/DataModel/ElectronSelectionTable.h"
 #include "PWGJE/DataModel/EMCALClusters.h"
 
-#include "PWGHF/HFL/DataModel/ElectronSelectionTable.h"
+#include "Common/CCDB/TriggerAliases.h"
+#include "Common/Core/RecoDecay.h"
+#include "Common/DataModel/EventSelection.h"
+#include "Common/DataModel/Multiplicity.h"
+#include "Common/DataModel/PIDResponseTOF.h"
+#include "Common/DataModel/PIDResponseTPC.h"
+#include "Common/DataModel/TrackSelectionTables.h"
+#include "Tools/KFparticle/KFUtilities.h"
+
+#include <CommonConstants/MathConstants.h>
+#include <CommonConstants/PhysicsConstants.h>
+#include <Framework/ASoA.h>
+#include <Framework/AnalysisDataModel.h>
+#include <Framework/AnalysisHelpers.h>
+#include <Framework/AnalysisTask.h>
+#include <Framework/Configurable.h>
+#include <Framework/HistogramRegistry.h>
+#include <Framework/HistogramSpec.h>
+#include <Framework/InitContext.h>
+#include <Framework/runDataProcessing.h>
+
+#include <TPDGCode.h>
+
+#include <KFPTrack.h>
+#include <KFParticle.h>
+
+#include <array>
+#include <cmath>
+#include <cstdint>
 
 using namespace o2;
 using namespace o2::constants::physics;
@@ -43,33 +53,6 @@ using namespace o2::framework;
 using namespace o2::framework::expressions;
 using namespace o2::soa;
 
-const int etaAxisBins = 100;
-const float trackEtaAxisMin = -1.5;
-const float trackEtaAxisMax = 1.5;
-const int phiAxisBins = 100;
-const float trackPhiAxisMin = 0.;
-const float trackPhiAxisMax = o2::constants::math::TwoPI;
-const int passEMCalBins = 3;
-const int passEMCalAxisMin = 0.;
-const int passEMCalAxisMax = 3;
-const int eopAxisBins = 60;
-const float eopAxisMin = 0.;
-const float eopAxisMax = 3.0;
-const int pAxisBins = 500;
-const float pAxisMin = 0.;
-const float pAxisMax = 50.0;
-const int m02AxisBins = 100;
-const float m02AxisMin = 0.;
-const float m02AxisMax = 2.0;
-const int m20AxisBins = 100;
-const float m20AxisMin = 0.;
-const float m20AxisMax = 2.0;
-const int nSigmaAxisBins = 300;
-const float nSigmaAxisMin = -15.;
-const float nSigmaAxisMax = 15.;
-const int dEdxAxisBins = 480;
-const float dEdxAxisMin = 0.;
-const float dEdxAxisMax = 160.;
 const int kEta = 221;
 
 struct HfElectronSelectionWithTpcEmcal {
@@ -77,10 +60,17 @@ struct HfElectronSelectionWithTpcEmcal {
   Produces<aod::HfSelEl> electronSel;
   Produces<aod::HfCorrSelEl> hfElectronSelection;
   Produces<aod::HfMcGenSelEl> hfGenElectronSel;
+
+  enum EMCalRegion {
+    NoAcceptance = 0,
+    EMCalAcceptance = 1,
+    DCalAcceptance = 2
+  };
   // Configurables
   // EMCal Cluster information
   KFParticle kfNonHfe;
   Configurable<bool> fillEmcClusterInfo{"fillEmcClusterInfo", true, "Fill histograms with EMCal cluster info before and after track match"};
+  Configurable<bool> fillTrackInfo{"fillTrackInfo", true, "Fill histograms with Track Information info before track match"};
 
   // Event Selection
   Configurable<float> zPvPosMax{"zPvPosMax", 10., "Maximum z of the primary vertex (cm)"};
@@ -107,10 +97,10 @@ struct HfElectronSelectionWithTpcEmcal {
   Configurable<float> etaTrackDCalNegativeMin{"etaTrackDCalNegativeMin", -0.6f, "Eta range for electron tracks"};
   Configurable<float> etaTrackDCalPositiveMax{"etaTrackDCalPositiveMax", 0.6f, "Eta range for electron Dcal tracks"};
   Configurable<float> etaTrackDCalPositiveMin{"etaTrackDCalPositiveMin", 0.22f, "Eta range for electron tracks"};
-  Configurable<float> phiTrackDCalMax{"phiTrackDCalMax", 3.3621f, "phi range for electron tracks associated Dcal"};
-  Configurable<float> phiTrackDCalMin{"phiTrackDCalMin", 1.3955f, "phi range for electron tracks associated Dcal"};
-  Configurable<float> phiTrackEMCalMax{"phiTrackEMCalMax", 5.708f, "phi range for electron tracks associated Emcal"};
-  Configurable<float> phiTrackEMCalMin{"phiTrackEMCalMin", 4.5355f, "phi range for electron tracks associated Emcal"};
+  Configurable<float> phiTrackDCalMax{"phiTrackDCalMax", 5.708f, "phi range for electron tracks associated Dcal"};
+  Configurable<float> phiTrackDCalMin{"phiTrackDCalMin", 4.5355f, "phi range for electron tracks associated Dcal"};
+  Configurable<float> phiTrackEMCalMax{"phiTrackEMCalMax", 3.3621f, "phi range for electron tracks associated Emcal"};
+  Configurable<float> phiTrackEMCalMin{"phiTrackEMCalMin", 1.3955f, "phi range for electron tracks associated Emcal"};
 
   // Track and  EMCal Cluster matching cut
   Configurable<float> deltaEtaMatchMin{"deltaEtaMatchMin", -0.013f, "Min Eta distance of EMCAL cluster to its closest track"};
@@ -143,64 +133,88 @@ struct HfElectronSelectionWithTpcEmcal {
   Filter collisionFilter = nabs(aod::collision::posZ) < zPvPosMax && aod::collision::numContrib > static_cast<uint16_t>(1);
   PresliceUnsorted<o2::aod::EMCALMatchedTracks> perClusterMatchedTracks = o2::aod::emcalmatchedtrack::trackId;
 
-  HistogramConfigSpec hEmcClusterEnergySpec{HistType::kTH1F, {{300, 0.0, 30.0}}};
-  HistogramConfigSpec hEmcClusterEtaPhiSpec{HistType::kTH2F, {{100, -0.9, 0.9}, {200, 0, 6.3}}};
-  HistogramConfigSpec hEmcClusterEnergyCellSpec{HistType::kTH2F, {{400, 0.0, 30.0}, {50, 0, 50}}};
-  HistogramConfigSpec hEmcClusterEnergyTimeSpec{HistType::kTH2F, {{300, 0.0, 30.0}, {1800, -900, 900}}};
+  // configurable axis
 
-  HistogramConfigSpec hDeltaPhiDeltaEtaEmcClusterTrackSpecEnergy{HistType::kTH3F, {{400, -0.2, 0.2}, {400, -0.2, 0.2}, {600, -300, 300}}};
-  HistogramConfigSpec hAfterMatchEoPSigamSpec{HistType::kTHnSparseD, {{eopAxisBins, eopAxisMin, eopAxisMax}, {pAxisBins, pAxisMin, pAxisMax}, {nSigmaAxisBins, nSigmaAxisMin, nSigmaAxisMax}, {m02AxisBins, m02AxisMin, m02AxisMax}, {m20AxisBins, m20AxisMin, m20AxisMax}}};
+  ConfigurableAxis binsPosZ{"binsPosZ", {100, -10., 10.}, "primary vertex z coordinate"};
+  ConfigurableAxis binsEta{"binsEta", {100, -2.0, 2.}, "#it{#eta}"};
+  ConfigurableAxis binsPhi{"binsPhi", {32, 0.0, o2::constants::math::TwoPI}, "#it{#varphi}"};
+  ConfigurableAxis binsPt{"binsPt", {50, 0.0, 50}, "#it{p_{T}}(GeV/#it{c})"};
+  ConfigurableAxis binsdEdx{"binsdEdx", {160, 0., 160.}, "dE/dX"};
+  ConfigurableAxis binsnSigma{"binsnSigma", {30, -15., 15.}, "#it{#sigma_{TPC}}"};
+  ConfigurableAxis binsM02{"binsM02", {50, 0., 2.0}, "M02; entries"};
+  ConfigurableAxis binsM20{"binsM20", {50, 0., 2.0}, "M20; entries"};
+  ConfigurableAxis binsEoP{"binsEoP", {30, 0., 3.}, "e/p"};
+  ConfigurableAxis binsEmcEnergy{"binsEmcEnergy", {50, 0., 50.}, "Cluster Energy (GeV/#it{c}^{2})"};
+  ConfigurableAxis binsEmcClsNCells{"binsEmcClsNCells", {50, 0., 50.}, "nCells"};
+  ConfigurableAxis binsEmcClsTime{"binsEmcClsTime", {1800, -900.0, 900.}, "Cluster Time"};
+  ConfigurableAxis binsPassEMcal{"binsPassEMcal", {3, 0.0, 3.}, "Pass EMcal"};
 
-  HistogramConfigSpec hTrackEnergyLossSpec{HistType::kTH3F, {{dEdxAxisBins, dEdxAxisMin, dEdxAxisMax}, {pAxisBins, pAxisMin, pAxisMax}, {passEMCalBins, passEMCalAxisMin, passEMCalAxisMax}}};
-
-  HistogramConfigSpec hTracknSigmaSpec{HistType::kTH3F, {{nSigmaAxisBins, nSigmaAxisMin, nSigmaAxisMax}, {pAxisBins, pAxisMin, pAxisMax}, {passEMCalBins, passEMCalAxisMin, passEMCalAxisMax}}};
+  ConfigurableAxis binsDeltaEta{"binsDeltaEta", {20, -0.2, 0.2}, "Track Cluser Match #Delta #eta"};
+  ConfigurableAxis binsDeltaPhi{"binsDeltaPhi", {20, -0.2, 0.2}, "Track Cluser Match #Delta #varphi"};
+  ConfigurableAxis binsMass{"binsMass", {100, 0.0, 2.0}, "Mass (GeV/#it{c}^{2}); entries"};
 
   HistogramRegistry registry{
     "registry",
-    {{"hNevents", "No of events", {HistType::kTH1F, {{3, 1, 4}}}},
-     {"hZvertex", "z vertex", {HistType::kTH1F, {{100, -100, 100}}}},
-     {"hLikeMass", "Like mass", {HistType::kTH1F, {{1000, 0, 2.0}}}},
-     {"hUnLikeMass", "unLike mass", {HistType::kTH1F, {{1000, 0, 1.0}}}},
-     {"hLikeSignPt", "Like sign Momentum ", {HistType::kTH1F, {{pAxisBins, pAxisMin, pAxisMax}}}},
-     {"hUnLikeSignPt", "UnLike sign Momentum", {HistType::kTH1F, {{pAxisBins, pAxisMin, pAxisMax}}}},
-     {"hMcgenInElectron", "Mc Gen Inclusive Electron", {HistType::kTH1F, {{pAxisBins, pAxisMin, pAxisMax}}}},
-     {"hMcgenAllNonHfeElectron", "Mc Gen All NonHf Electron", {HistType::kTH1F, {{pAxisBins, pAxisMin, pAxisMax}}}},
-     {"hMcgenNonHfeElectron", "Mc Gen NonHf  Electron with mother", {HistType::kTH1F, {{pAxisBins, pAxisMin, pAxisMax}}}},
-     {"hPi0eEmbTrkPt", "Mc Gen  Pi0 mother NonHf Electron", {HistType::kTH1F, {{pAxisBins, pAxisMin, pAxisMax}}}},
-
-     {"hEtaeEmbTrkPt", "Mc Gen  Eta mother  NonHf Electron", {HistType::kTH1F, {{pAxisBins, pAxisMin, pAxisMax}}}},
-     {"hEmcClusterM02", "m02", {HistType::kTH1F, {{m02AxisBins, m02AxisMin, m02AxisMax}}}},
-     {"hEmcClusterM20", "m20", {HistType::kTH1F, {{m20AxisBins, m20AxisMin, m20AxisMax}}}},
-     {"hTrackEtaPhi", "TPC EtaPhi Info; #eta;#varphi;passEMcal;", {HistType::kTH3F, {{etaAxisBins, trackEtaAxisMin, trackEtaAxisMax}, {phiAxisBins, trackPhiAxisMin, trackPhiAxisMax}, {passEMCalBins, passEMCalAxisMin, passEMCalAxisMax}}}},
-     {"hTrackEnergyLossVsP", " TPC Energy loss info vs P; dE/dx;#it{p} (GeV#it{/c});passEMcal;", hTrackEnergyLossSpec},
-     {"hTrackEnergyLossVsPt", " TPC Energy loss info vs Pt; dE/dx;#it{p}_{T} (GeV#it{/c});passEMcal;", hTrackEnergyLossSpec},
-     {"hTracknSigmaVsP", " TPC nSigma info vs P; n#sigma;#it{p} (GeV#it{/c});passEMcal;", hTracknSigmaSpec},
-     {"hTracknSigmaVsPt", " TPC nSigma info vs Pt; n#sigma;#it{p}_{T} (GeV#it{/c});passEMcal;", hTracknSigmaSpec},
-     {"hEmcClusterEnergy", "EMCal Cluster Info before match Energy; Energy (GeV)", hEmcClusterEnergySpec},
-     {"hEmcClusterEtaPhi", "EMCal Cluster Info before match Eta  and Phi; #eta;#varphi;", hEmcClusterEtaPhiSpec},
-     {"hEmcClusterEnergyCell", "EMCal Cluster Info before match Energy vs nCells; Energy (GeV);ncell;", hEmcClusterEnergyCellSpec},
-     {"hEmcClusterEnergyTime", "EMCal Cluster Info before match Energy vs time; Energy (GeV); sec;", hEmcClusterEnergyTimeSpec},
-     {"hEmcClusterAfterMatchEnergy", "EMCal Cluster Info After match Energy; Energy (GeV)", hEmcClusterEnergySpec},
-     {"hEmcClusterAfterMatchEtaPhi", "EMCal Cluster Info After match Eta  and Phi; #eta;#varphi;", hEmcClusterEtaPhiSpec},
-     {"hEmcClusterAfterMatchEnergyCells", "EMCal Cluster Info After match Energy vs nCells; Energy (GeV);ncell;", hEmcClusterEnergyCellSpec},
-     {"hEmcClusterAfterMatchEnergyTime", "EMCal Cluster Info After match Energy vs time; Energy (GeV); sec;", hEmcClusterEnergyTimeSpec},
-
-     {"hAfterMatchSigmaVsEoP", "PID Info after  match EoP vs Sigma ; E/P;#it{p}_{T} (GeV#it{/c});n#sigma; m02; m20;", hAfterMatchEoPSigamSpec},
-     {"hAfterMatchEoPVsP", "PID Info after match  EoP vs P; E/P;#it{p} (GeV#it{/c});", {HistType::kTH2F, {{eopAxisBins, eopAxisMin, eopAxisMax}, {pAxisBins, pAxisMin, pAxisMax}}}},
-     {"hAfterMatchSigmaVsP", "PID Info after match Sigma vs Momentum ; n#sigma; #it{p} (GeV#it{/c}; ", {HistType::kTH2F, {{nSigmaAxisBins, nSigmaAxisMin, nSigmaAxisMax}, {pAxisBins, pAxisMin, pAxisMax}}}},
-     {"hAfterMatchEtaPhi", "PID Info after match Eta vs Phi ; #eta; #varphi; ", {HistType::kTH2F, {{etaAxisBins, trackEtaAxisMin, trackEtaAxisMax}, {phiAxisBins, trackPhiAxisMin, trackPhiAxisMax}}}},
-     {"hAfterMatchEnergyLossVsP", "PID Info after match Energy loss info vs P ; dE/dx;#it{p} (GeV#it{/c});; ", {HistType::kTH2F, {{dEdxAxisBins, dEdxAxisMin, dEdxAxisMax}, {pAxisBins, pAxisMin, pAxisMax}}}},
-     {"hAfterMatchEnergyLossVsPt", "PID Info after match Energy loss info vs Pt ;dE/dx;#it{p}_{T} (GeV#it{/c}); ", {HistType::kTH2F, {{dEdxAxisBins, dEdxAxisMin, dEdxAxisMax}, {pAxisBins, pAxisMin, pAxisMax}}}},
-
-     {"hAfterPIDEtaPhi", "PID Info after PID Cuts Eta vs Phi ; #eta; #varphi; ", {HistType::kTH2F, {{etaAxisBins, trackEtaAxisMin, trackEtaAxisMax}, {phiAxisBins, trackPhiAxisMin, trackPhiAxisMax}}}},
-     {"hEPRatioAfterPID", "E/P Ratio after PID Cuts apply only trackwodca filter", {HistType::kTH2F, {{pAxisBins, pAxisMin, pAxisMax}, {300, 0, 30}}}},
-     {"hPIDAfterPIDCuts", "PID Info after PID cuts; E/P;#it{p}_{T} (GeV#it{/c});n#sigma;m02; m20;", hAfterMatchEoPSigamSpec},
-     {"hEmcClsTrkEtaPhiDiffTimeEnergy", "EmcClsTrkEtaPhiDiffTimeEnergy;#Delta#eta;#Delta#varphi;Sec;", hDeltaPhiDeltaEtaEmcClusterTrackSpecEnergy}}};
+    {}};
 
   void init(o2::framework::InitContext&)
   {
-    registry.get<THnSparse>(HIST("hAfterMatchSigmaVsEoP"))->Sumw2();
-    registry.get<THnSparse>(HIST("hPIDAfterPIDCuts"))->Sumw2();
+    AxisSpec axisPosZ = {binsPosZ, "Pos Z"};
+    AxisSpec axisMass = {binsMass, "Mass (GeV/#it{c}^{2}); entries"};
+    AxisSpec axisPt = {binsPt, "#it{p_{T}}(GeV/#it{c})"};
+    AxisSpec axisEta = {binsEta, "#it{#eta}"};
+    AxisSpec axisPhi = {binsPhi, "#it{#varphi}"};
+    AxisSpec axisdEdx = {binsdEdx, "dE/dX"};
+    AxisSpec axisnSigma = {binsnSigma, "it{#sigma_{TPC}}"};
+    AxisSpec axisM02 = {binsM02, "M02; entries"};
+    AxisSpec axisM20 = {binsM20, "M20; entries"};
+    AxisSpec axisEoP = {binsEoP, "E/p"};
+    AxisSpec axisEmcEnergy = {binsEmcEnergy, "Cluster Energy (GeV/#it{c}^{2})"};
+    AxisSpec axisEmcClsNCells = {binsEmcClsNCells, "nCell"};
+    AxisSpec axisEmcClsTime = {binsEmcClsTime, "Cluster Time"};
+    AxisSpec axisPassEMcal = {binsPassEMcal, "Pass EMcal"};
+    AxisSpec axisDeltaEta = {binsDeltaEta, "#Delta #eta = #eta_{trk}- #eta_{cluster}"};
+    AxisSpec axisDeltaPhi = {binsDeltaPhi, "#Delta #varphi = #varphi_{trk}- #varphi_{cluster}"};
+
+    registry.add("hZvertex", "z vertex", {HistType::kTH1D, {axisPosZ}});
+    registry.add("hNevents", "No of events", {HistType::kTH1D, {{3, 1, 4}}});
+    registry.add("hLikeMass", "Like mass", {HistType::kTH1D, {{axisMass}}});
+    registry.add("hUnLikeMass", "unLike mass", {HistType::kTH1D, {{axisMass}}});
+    registry.add("hLikeSignPt", "Like sign Momentum ", {HistType::kTH1D, {{axisPt}}});
+    registry.add("hUnLikeSignPt", "UnLike sign Momentum", {HistType::kTH1D, {{axisPt}}});
+    registry.add("hMcgenInElectron", "Mc Gen Inclusive Electron", {HistType::kTH1D, {{axisPt}}});
+    registry.add("hMcgenAllNonHfeElectron", "Mc Gen All NonHf Electron", {HistType::kTH1D, {{axisPt}}});
+    registry.add("hMcgenNonHfeElectron", "Mc Gen NonHf  Electron with mother", {HistType::kTH1D, {{axisPt}}});
+    registry.add("hPi0eEmbTrkPt", "Mc Gen  Pi0 mother NonHf Electron", {HistType::kTH1D, {{axisPt}}});
+
+    registry.add("hEtaeEmbTrkPt", "Mc Gen  Eta mother  NonHf Electron", {HistType::kTH1D, {{axisPt}}});
+    registry.add("hEmcClusterM02", "m02", {HistType::kTH1D, {{axisM02}}});
+    registry.add("hEmcClusterM20", "m20", {HistType::kTH1D, {{axisM20}}});
+    registry.add("hTrackEtaPhi", "TPC EtaPhi Info; #eta;#varphi;passEMcal;", {HistType::kTH3F, {{axisEta}, {axisPhi}, {axisPassEMcal}}});
+    registry.add("hTrackEnergyLossVsP", " TPC Energy loss info vs P; dE/dx;#it{p} (GeV#it{/c});passEMcal;", {HistType::kTH3F, {{axisdEdx}, {axisPt}, {axisPassEMcal}}});
+    registry.add("hTrackEnergyLossVsPt", "TPC Energy loss info vs Pt; dE/dx;#it{p}_{T} (GeV#it{/c});passEMcal;", {HistType::kTH3F, {{axisdEdx}, {axisPt}, {axisPassEMcal}}});
+    registry.add("hTracknSigmaVsP", " TPC nSigma info vs P; n#sigma;#it{p} (GeV#it{/c});passEMcal;", {HistType::kTH3F, {{axisnSigma}, {axisPt}, {axisPassEMcal}}});
+    registry.add("hTracknSigmaVsPt", "  TPC nSigma info vs Pt; n#sigma;#it{p}_{T} (GeV#it{/c});passEMcal;", {HistType::kTH3F, {{axisnSigma}, {axisPt}, {axisPassEMcal}}});
+    registry.add("hEmcClusterEnergy", "EMCal Cluster Info before match Energy; Energy (GeV); entries;", {HistType::kTH1D, {{axisEmcEnergy}}});
+    registry.add("hEmcClusterEtaPhi", "EMCal Cluster Info before match Eta  and Phi; #eta;#varphi;", {HistType::kTH2F, {{axisEta}, {axisPhi}}});
+    registry.add("hEmcClusterEnergyCell", "EMCal Cluster Info before match Energy vs nCells; Energy (GeV);ncell;", {HistType::kTH2F, {{axisEmcEnergy}, {axisEmcClsNCells}}});
+    registry.add("hEmcClusterEnergyTime", "EMCal Cluster Info before match Energy vs time; Energy (GeV); sec;", {HistType::kTH2F, {{axisEmcEnergy}, {axisEmcClsTime}}});
+    registry.add("hEmcClusterAfterMatchEnergy", "EMCal Cluster Info After match Energy; Energy (GeV); entries;", {HistType::kTH1D, {{axisEmcEnergy}}});
+    registry.add("hEmcClusterAfterMatchEtaPhi", "EMCal Cluster Info After match Eta  and Phi; #eta;#varphi;", {HistType::kTH2F, {{axisEta}, {axisPhi}}});
+    registry.add("hEmcClusterAfterMatchEnergyCells", "EMCal Cluster Info After match Energy vs nCells; Energy (GeV);ncell;", {HistType::kTH2F, {{axisEmcEnergy}, {axisEmcClsNCells}}});
+    registry.add("hEmcClusterAfterMatchEnergyTime", "EMCal Cluster Info After match Energy vs time; Energy (GeV); sec;", {HistType::kTH2F, {{axisEmcEnergy}, {axisEmcClsTime}}});
+    registry.add("hAfterMatchSigmaVsEoP", "PID Info after  match EoP vs Sigma ; E/P;#it{p}_{T} (GeV#it{/c});n#sigma; m02; m20;", {HistType::kTHnSparseF, {{axisEoP}, {axisPt}, {axisnSigma}, {axisM02}, {axisM20}}});
+    registry.add("hAfterMatchEoPVsP", "PID Info after match  EoP vs P; E/P;#it{p} (GeV#it{/c});", {HistType::kTH2F, {{axisEoP}, {axisPt}}});
+    registry.add("hAfterMatchSigmaVsP", "PID Info after match Sigma vs Momentum ; n#sigma; #it{p} (GeV#it{/c}; ", {HistType::kTH2F, {{axisnSigma}, {axisPt}}});
+    registry.add("hAfterMatchEtaPhi", "PID Info after match Eta vs Phi ; #eta; #varphi; ", {HistType::kTH2F, {{axisEta}, {axisPhi}}});
+    registry.add("hAfterMatchEnergyLossVsP", "PID Info after match Energy loss info vs P ; dE/dx;#it{p} (GeV#it{/c});; ", {HistType::kTH2F, {{axisdEdx}, {axisPt}}});
+    registry.add("hAfterMatchEnergyLossVsPt", "PID Info after match Energy loss info vs Pt ;dE/dx;#it{p}_{T} (GeV#it{/c}); ", {HistType::kTH2F, {{axisdEdx}, {axisPt}}});
+
+    registry.add("hAfterPIDEtaPhi", "PID Info after PID Cuts Eta vs Phi ; #eta; #varphi; ", {HistType::kTH2F, {{axisEta}, {axisPhi}}});
+    registry.add("hEPRatioAfterPID", "E/P Ratio after PID Cuts apply only trackwodca filter", {HistType::kTH2F, {{axisPt}, {axisEmcEnergy}}});
+
+    registry.add("hPIDAfterPIDCuts", "PID Info after PID cuts; E/P;#it{p}_{T} (GeV#it{/c});n#sigma;m02; m20;", {HistType::kTHnSparseF, {{axisEoP}, {axisPt}, {axisnSigma}, {axisM02}, {axisM20}}});
+    registry.add("hEmcClsTrkEtaPhiDiffTime", "EmcClsTrkEtaPhiDiffTime;#Delta#eta;#Delta#varphi;Sec;", {HistType::kTH3F, {{axisDeltaEta}, {axisDeltaPhi}, {axisEmcClsTime}}});
   }
   // Track Selection Cut
   template <typename T>
@@ -267,8 +281,8 @@ struct HfElectronSelectionWithTpcEmcal {
   template <typename ElectronType, typename TracksType>
   void nonHfe(ElectronType const& electron, TracksType const& tracks, bool isEMcal)
   {
-    int isLSElectronFound = 0;
-    int isULSElectronFound = 0;
+    int nElPairsLS = 0;
+    int nElPairsUS = 0;
     bool isLSElectron = false;
     bool isULSElectron = false;
     float invMassElectron = 0.;
@@ -337,7 +351,7 @@ struct HfElectronSelectionWithTpcEmcal {
       // for like charge
       if (isLSElectron && (invMassElectron <= invariantMass)) {
         massLike = invMassElectron;
-        ++isLSElectronFound;
+        ++nElPairsLS;
         if (isEMcal) {
           registry.fill(HIST("hLikeSignPt"), electron.pt());
         }
@@ -345,14 +359,14 @@ struct HfElectronSelectionWithTpcEmcal {
       // for unlike charge
       if (isULSElectron && (invMassElectron <= invariantMass)) {
         massUnLike = invMassElectron;
-        ++isULSElectronFound;
+        ++nElPairsUS;
         if (isEMcal) {
           registry.fill(HIST("hUnLikeSignPt"), electron.pt());
         }
       }
     }
     // Pass multiplicities and other required parameters for this electron
-    hfElectronSelection(electron.collisionId(), electron.globalIndex(), electron.eta(), electron.phi(), electron.pt(), electron.tpcNSigmaEl(), electron.tofNSigmaEl(), isLSElectronFound, isULSElectronFound, isEMcal);
+    hfElectronSelection(electron.collisionId(), electron.globalIndex(), electron.eta(), electron.phi(), electron.pt(), electron.tpcNSigmaEl(), electron.tofNSigmaEl(), nElPairsLS, nElPairsUS, isEMcal);
   }
   // Electron Identification
   template <bool isMc, typename TracksType, typename EmcClusterType, typename MatchType, typename CollisionType, typename ParticleType>
@@ -362,6 +376,11 @@ struct HfElectronSelectionWithTpcEmcal {
       return;
 
     registry.fill(HIST("hNevents"), 1);
+
+    // skip events with no clusters
+    if (emcClusters.size() == 0) {
+      return;
+    }
     registry.fill(HIST("hZvertex"), collision.posZ());
 
     /////////////////////////////////
@@ -377,7 +396,7 @@ struct HfElectronSelectionWithTpcEmcal {
         registry.fill(HIST("hEmcClusterM20"), emcClusterBefore.m20());
       }
     }
-    int passEMCal;
+    EMCalRegion passEMCal = NoAcceptance;
     float phiTrack = -999;
     float etaTrack = -999;
     float pTrack = -999;
@@ -398,19 +417,18 @@ struct HfElectronSelectionWithTpcEmcal {
       if (!selTracks(track)) {
         continue;
       }
-      passEMCal = 0;
-
       if ((phiTrack > phiTrackEMCalMin && phiTrack < phiTrackEMCalMax) && (etaTrack > etaTrackMin && etaTrack < etaTrackMax))
-        passEMCal = 1; // EMcal acceptance passed
+        passEMCal = EMCalAcceptance; // EMcal acceptance passed
       if ((phiTrack > phiTrackDCalMin && phiTrack < phiTrackDCalMax) && ((etaTrack > etaTrackDCalPositiveMin && etaTrack < etaTrackDCalPositiveMax) || (etaTrack > etaTrackDCalNegativeMin && etaTrack < etaTrackDCalNegativeMax)))
-        passEMCal = 2; // Dcal acceptance passed
+        passEMCal = DCalAcceptance; // Dcal acceptance passed
 
-      registry.fill(HIST("hTrackEtaPhi"), etaTrack, phiTrack, passEMCal);                 // track etaphi infor after filter bit
-      registry.fill(HIST("hTrackEnergyLossVsP"), track.tpcSignal(), pTrack, passEMCal);   // track etaphi infor after filter bit
-      registry.fill(HIST("hTrackEnergyLossVsPt"), track.tpcSignal(), ptTrack, passEMCal); // track etaphi infor after filter bit
-      registry.fill(HIST("hTracknSigmaVsP"), tpcNsigmaTrack, pTrack, passEMCal);          // track etaphi infor after filter bit
-      registry.fill(HIST("hTracknSigmaVsPt"), tpcNsigmaTrack, ptTrack, passEMCal);        // track etaphi infor after filter bit
-
+      if (fillTrackInfo) {
+        registry.fill(HIST("hTrackEtaPhi"), etaTrack, phiTrack, passEMCal);                 // track etaphi infor after filter bit
+        registry.fill(HIST("hTrackEnergyLossVsP"), track.tpcSignal(), pTrack, passEMCal);   // track etaphi infor after filter bit
+        registry.fill(HIST("hTrackEnergyLossVsPt"), track.tpcSignal(), ptTrack, passEMCal); // track etaphi infor after filter bit
+        registry.fill(HIST("hTracknSigmaVsP"), tpcNsigmaTrack, pTrack, passEMCal);          // track etaphi infor after filter bit
+        registry.fill(HIST("hTracknSigmaVsPt"), tpcNsigmaTrack, ptTrack, passEMCal);        // track etaphi infor after filter bit
+      }
       auto tracksofcluster = matchedTracks.sliceBy(perClusterMatchedTracks, track.globalIndex());
       float phiMatchTrack = -999;
       float etaMatchTrack = -999;
@@ -461,13 +479,14 @@ struct HfElectronSelectionWithTpcEmcal {
           continue;
         }
 
-        registry.fill(HIST("hEmcClsTrkEtaPhiDiffTimeEnergy"), deltaEtaMatch, deltaPhiMatch, timeEmcCluster);
+        registry.fill(HIST("hEmcClsTrkEtaPhiDiffTime"), deltaEtaMatch, deltaPhiMatch, timeEmcCluster);
 
-        if (fillEmcClusterInfo)
-          registry.fill(HIST("hEmcClusterAfterMatchEnergy"), emcCluster.energy());                         // track etaphi infor after filter bit
-        registry.fill(HIST("hEmcClusterAfterMatchEtaPhi"), emcCluster.eta(), emcCluster.phi());            // track etaphi infor after filter bit
-        registry.fill(HIST("hEmcClusterAfterMatchEnergyCells"), emcCluster.energy(), emcCluster.nCells()); // track etaphi infor after filter bit
-        registry.fill(HIST("hEmcClusterAfterMatchEnergyTime"), emcCluster.energy(), emcCluster.time());    // track etaphi infor after filter bit
+        if (fillEmcClusterInfo) {
+          registry.fill(HIST("hEmcClusterAfterMatchEnergy"), emcCluster.energy());                           // track etaphi infor after filter bit
+          registry.fill(HIST("hEmcClusterAfterMatchEtaPhi"), emcCluster.eta(), emcCluster.phi());            // track etaphi infor after filter bit
+          registry.fill(HIST("hEmcClusterAfterMatchEnergyCells"), emcCluster.energy(), emcCluster.nCells()); // track etaphi infor after filter bit
+          registry.fill(HIST("hEmcClusterAfterMatchEnergyTime"), emcCluster.energy(), emcCluster.time());    // track etaphi infor after filter bit
+        }
 
         eop = eMatchEmcCluster / pMatchTrack;
 
@@ -516,7 +535,7 @@ struct HfElectronSelectionWithTpcEmcal {
   {
     fillElectronTrack<false>(collision, tracks, emcClusters, matchedTracks, 0);
   }
-  PROCESS_SWITCH(HfElectronSelectionWithTpcEmcal, processData, "process Data info only", false);
+  PROCESS_SWITCH(HfElectronSelectionWithTpcEmcal, processData, "process Data info only", true);
   ///  Electron selection - for MC reco-level analysis
   void processMcRec(McTableCollision const& mcCollision,
                     McTableTracks const& mcTracks,
@@ -608,7 +627,7 @@ struct HfElectronSelectionWithTpcEmcal {
     }
   }
 
-  PROCESS_SWITCH(HfElectronSelectionWithTpcEmcal, processMcGen, "Process MC Gen mode", true);
+  PROCESS_SWITCH(HfElectronSelectionWithTpcEmcal, processMcGen, "Process MC Gen mode", false);
 };
 
 WorkflowSpec defineDataProcessing(ConfigContext const& cfgc)

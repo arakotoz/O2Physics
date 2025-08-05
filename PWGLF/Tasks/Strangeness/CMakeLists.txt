@@ -29,11 +29,6 @@ o2physics_add_dpl_workflow(cascadeanalysis
     PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore
     COMPONENT_NAME Analysis)
 
-o2physics_add_dpl_workflow(sigmaminus-task
-    SOURCES sigmaminustask.cxx
-    PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore
-    COMPONENT_NAME Analysis)
-
 o2physics_add_dpl_workflow(cascadeanalysismc
     SOURCES cascadeanalysisMC.cxx
     PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore
@@ -51,7 +46,7 @@ o2physics_add_dpl_workflow(cascadecorrelations
 
 o2physics_add_dpl_workflow(non-prompt-cascade
     SOURCES nonPromptCascade.cxx
-    PUBLIC_LINK_LIBRARIES O2::Framework O2::ReconstructionDataFormats O2Physics::AnalysisCore O2::DetectorsBase O2Physics::EventFilteringUtils
+    PUBLIC_LINK_LIBRARIES O2::Framework O2::ReconstructionDataFormats O2Physics::AnalysisCore O2::DetectorsBase O2::DetectorsVertexing O2Physics::EventFilteringUtils
     COMPONENT_NAME Analysis)
 
 o2physics_add_dpl_workflow(k0mixedevents
@@ -99,6 +94,11 @@ o2physics_add_dpl_workflow(lambdapolsp
     PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore
     COMPONENT_NAME Analysis)
 
+o2physics_add_dpl_workflow(task-lambda-spin-corr
+    SOURCES taskLambdaSpinCorr.cxx
+    PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore
+    COMPONENT_NAME Analysis)
+
 o2physics_add_dpl_workflow(cascpolsp
     SOURCES cascpolsp.cxx
     PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore
@@ -107,7 +107,7 @@ o2physics_add_dpl_workflow(cascpolsp
 if(FastJet_FOUND)
 o2physics_add_dpl_workflow(strangeness-in-jets
     SOURCES strangenessInJets.cxx
-    PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore O2Physics::PWGJECore FastJet::FastJet FastJet::Contrib
+    PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore O2Physics::PWGJECore FastJet::FastJet FastJet::Contrib O2Physics::EventFilteringUtils
     COMPONENT_NAME Analysis)
 endif()
 
@@ -138,5 +138,20 @@ o2physics_add_dpl_workflow(lambdalambda
 
 o2physics_add_dpl_workflow(lambdajetpolarization
     SOURCES lambdaJetpolarization.cxx
-    PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore
+    PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore O2Physics::PWGJECore FastJet::FastJet FastJet::Contrib O2Physics::EventFilteringUtils
+    COMPONENT_NAME Analysis)
+
+o2physics_add_dpl_workflow(lambdaspincorrderived
+    SOURCES lambdaspincorrderived.cxx
+    PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore
+    COMPONENT_NAME Analysis)
+
+o2physics_add_dpl_workflow(strangenessderivedbinnedinfo
+    SOURCES strangenessderivedbinnedinfo.cxx
+    PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore O2Physics::AnalysisCCDB O2Physics::EventFilteringUtils
+    COMPONENT_NAME Analysis)
+
+o2physics_add_dpl_workflow(lambdatwopartpolarization
+    SOURCES lambdaTwoPartPolarization.cxx
+    PUBLIC_LINK_LIBRARIES O2Physics::AnalysisCore
     COMPONENT_NAME Analysis)
