@@ -21,7 +21,6 @@
 #include "Common/Core/TableHelper.h"
 #include "Common/DataModel/EventSelection.h"
 #include "Common/DataModel/FT0Corrected.h"
-#include "Common/DataModel/PIDResponse.h"
 #include "Common/DataModel/PIDResponseTOF.h"
 #include "Common/TableProducer/PID/pidTOFBase.h"
 
@@ -848,6 +847,14 @@ struct McPidTof {
         }
         break;
       }
+      case IdxDe: {
+        if (fullTable) {
+          tablePIDFullDe.reserve(size);
+        } else {
+          tablePIDDe.reserve(size);
+        }
+        break;
+      }
       default:
         LOG(fatal) << "Wrong particle ID in reserveTable() for " << (fullTable ? "full" : "tiny") << " tables";
         break;
@@ -862,32 +869,28 @@ struct McPidTof {
         if (fullTable) {
           tablePIDFullPi(-999.f, -999.f);
         } else {
-          aod::pidutils::packInTable<aod::pidtof_tiny::binning>(-999.f,
-                                                                tablePIDPi);
+          aod::pidtof_tiny::binning::packInTable(-999.f, tablePIDPi);
         }
         break;
       case IdxKa:
         if (fullTable) {
           tablePIDFullKa(-999.f, -999.f);
         } else {
-          aod::pidutils::packInTable<aod::pidtof_tiny::binning>(-999.f,
-                                                                tablePIDKa);
+          aod::pidtof_tiny::binning::packInTable(-999.f, tablePIDKa);
         }
         break;
       case IdxPr:
         if (fullTable) {
           tablePIDFullPr(-999.f, -999.f);
         } else {
-          aod::pidutils::packInTable<aod::pidtof_tiny::binning>(-999.f,
-                                                                tablePIDPr);
+          aod::pidtof_tiny::binning::packInTable(-999.f, tablePIDPr);
         }
         break;
       case IdxDe:
         if (fullTable) {
           tablePIDFullDe(-999.f, -999.f);
         } else {
-          aod::pidutils::packInTable<aod::pidtof_tiny::binning>(-999.f,
-                                                                tablePIDDe);
+          aod::pidtof_tiny::binning::packInTable(-999.f, tablePIDDe);
         }
         break;
       default:
@@ -906,6 +909,7 @@ struct McPidTof {
       if (std::find(prodPostCalib.begin(), prodPostCalib.end(), metadataInfo.get("LPMProductionTag")) == prodPostCalib.end()) {
         enableMcRecalib = false;
         LOGP(warn, "Nsigma postcalibrations turned off for {} (new MC productions have FT0 digitisation fixed)", metadataInfo.get("LPMProductionTag"));
+        return;
       }
     } else {
       LOGP(error, "Impossible to read metadata! Using default calibrations (2022 apass7)");
@@ -1013,7 +1017,7 @@ struct McPidTof {
                 nSigma = applyMcRecalib(pidId, trk.pt(), nSigma);
               }
             }
-            aod::pidutils::packInTable<aod::pidtof_tiny::binning>(nSigma, tablePIDPi);
+            aod::pidtof_tiny::binning::packInTable(nSigma, tablePIDPi);
             break;
           }
           case IdxKa: {
@@ -1023,7 +1027,7 @@ struct McPidTof {
                 nSigma = applyMcRecalib(pidId, trk.pt(), nSigma);
               }
             }
-            aod::pidutils::packInTable<aod::pidtof_tiny::binning>(nSigma, tablePIDKa);
+            aod::pidtof_tiny::binning::packInTable(nSigma, tablePIDKa);
             break;
           }
           case IdxPr: {
@@ -1033,7 +1037,7 @@ struct McPidTof {
                 nSigma = applyMcRecalib(pidId, trk.pt(), nSigma);
               }
             }
-            aod::pidutils::packInTable<aod::pidtof_tiny::binning>(nSigma, tablePIDPr);
+            aod::pidtof_tiny::binning::packInTable(nSigma, tablePIDPr);
             break;
           }
           case IdxDe: {
@@ -1043,7 +1047,7 @@ struct McPidTof {
                 nSigma = applyMcRecalib(IdxPr, trk.pt(), nSigma);                              // FIXME: currently postcalibrations for protons applied to deuterons, to be checked
               }
             }
-            aod::pidutils::packInTable<aod::pidtof_tiny::binning>(nSigma, tablePIDDe);
+            aod::pidtof_tiny::binning::packInTable(nSigma, tablePIDDe);
             break;
           }
           default:

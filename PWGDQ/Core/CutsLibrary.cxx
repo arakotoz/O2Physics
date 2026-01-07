@@ -273,6 +273,12 @@ AnalysisCompositeCut* o2::aod::dqcuts::GetCompositeCut(const char* cutName)
     cut->AddCut(GetAnalysisCut("electronPIDnsigmaMedium"));
     return cut;
   }
+  if (!nameStr.compare("jpsiKineDcaQualitynoPID")) {
+    cut->AddCut(GetAnalysisCut("jpsiKineSkimmed"));
+    cut->AddCut(GetAnalysisCut("dcaCut1_ionut"));
+    cut->AddCut(GetAnalysisCut("electronStandardQualityForO2MCdebug"));
+    return cut;
+  }
   if (!nameStr.compare("electronSelection1_ionut_withTOFPID")) {
     cut->AddCut(GetAnalysisCut("jpsiStandardKine"));
     cut->AddCut(GetAnalysisCut("electronStandardQualityForO2MCdebug"));
@@ -4090,6 +4096,30 @@ AnalysisCut* o2::aod::dqcuts::GetAnalysisCut(const char* cutName)
     return cutAorC;
   }
 
+  if (!nameStr.compare("eventXn0nTime")) {
+    cut->AddCut(VarManager::kTimeZNA, -2.0, 2.0);
+    cut->AddCut(VarManager::kTimeZNC, -2.0, 2.0, true);
+    return cut;
+  }
+
+  if (!nameStr.compare("event0nXnTime")) {
+    cut->AddCut(VarManager::kTimeZNA, -2.0, 2.0, true);
+    cut->AddCut(VarManager::kTimeZNC, -2.0, 2.0);
+    return cut;
+  }
+
+  if (!nameStr.compare("event0n0nTime")) {
+    cut->AddCut(VarManager::kTimeZNA, -2.0, 2.0, true);
+    cut->AddCut(VarManager::kTimeZNC, -2.0, 2.0, true);
+    return cut;
+  }
+
+  if (!nameStr.compare("eventXnXnTime")) {
+    cut->AddCut(VarManager::kTimeZNA, -2.0, 2.0);
+    cut->AddCut(VarManager::kTimeZNC, -2.0, 2.0);
+    return cut;
+  }
+
   // Event cuts based on centrality
   if (!nameStr.compare("eventStandardNoINT7Cent090")) {
     cut->AddCut(VarManager::kVtxZ, -10.0, 10.0);
@@ -4303,6 +4333,22 @@ AnalysisCut* o2::aod::dqcuts::GetAnalysisCut(const char* cutName)
 
   // -----------------------------------------------
   // Barrel track quality cuts
+
+  // ---------------------------------------------------
+  // MC generated particle acceptance cuts
+
+  if (!nameStr.compare("rapidity08")) {
+    cut->AddCut(VarManager::kMCY, -0.8, 0.8);
+    return cut;
+  }
+
+  if (!nameStr.compare("rapidity09")) {
+    cut->AddCut(VarManager::kMCY, -0.9, 0.9);
+    return cut;
+  }
+
+  // ---------------------------------------------------
+  // MC generated particle acceptance cuts
 
   // Run 2 only
 
