@@ -122,6 +122,10 @@ struct CorrelationTask {
 
   ConfigurableAxis axisInvMass{"axisInvMass", {VARIABLE_WIDTH, 1.7, 1.75, 1.8, 1.85, 1.9, 1.95, 2.0, 5.0}, "invariant mass axis for histograms"};
 
+  ConfigurableAxis axisMultCorrCent{"axisMultCorrCent", {100, 0, 100}, "multiplicity correlation axis for centralities"};
+  ConfigurableAxis axisMultCorrV0{"axisMultCorrV0", {1000, 0, 100000}, "multiplicity correlation axis for V0 multiplicities"};
+  ConfigurableAxis axisMultCorrMult{"axisMultCorrMult", {1000, 0, 1000}, "multiplicity correlation axis for track multiplicities"};
+
   // This filter is applied to AOD and derived data (column names are identical)
   Filter collisionZVtxFilter = nabs(aod::collision::posZ) < cfgCutVertex;
   // This filter is only applied to AOD
@@ -185,18 +189,26 @@ struct CorrelationTask {
         registry.add("invMassTwoPartDEta", "2D 2-prong invariant mass (GeV/c^2)", {HistType::kTHnSparseF, {axisSpecMass, axisSpecMass, axisPtTrigger, axisPtAssoc, axisDeltaEta}});
       }
     }
+    if (doprocessMCReflection2ProngML) {
+      const AxisSpec& a = AxisSpec(axisInvMass);
+      AxisSpec axisSpecMass = {1000, a.binEdges[0], a.binEdges[a.getNbins()]};
+      registry.add("invMassSignal", "2-prong invariant mass (GeV/c^2)", {HistType::kTH3F, {axisSpecMass, axisPtTrigger, axisMultiplicity}});
+      registry.add("invMassReflected", "2-prong invariant mass (GeV/c^2)", {HistType::kTH3F, {axisSpecMass, axisPtTrigger, axisMultiplicity}});
+    }
     if (doprocessSameDerivedMultSet) {
       if (cfgMultCorrelationsMask == 0)
         LOGF(fatal, "cfgMultCorrelationsMask can not be 0 when MultSet process functions are in use.");
       std::vector<AxisSpec> multAxes;
       if (cfgMultCorrelationsMask & aod::cfmultset::CentFT0C)
-        multAxes.emplace_back(100, 0, 100, "FT0C centrality");
+        multAxes.emplace_back(axisMultCorrCent, "FT0C centrality");
       if (cfgMultCorrelationsMask & aod::cfmultset::MultFV0A)
-        multAxes.emplace_back(1000, 0, 100000, "V0A multiplicity");
+        multAxes.emplace_back(axisMultCorrV0, "V0A multiplicity");
       if (cfgMultCorrelationsMask & aod::cfmultset::MultNTracksPV)
-        multAxes.emplace_back(100, 0, 1000, "Nch PV");
+        multAxes.emplace_back(axisMultCorrMult, "Nch PV");
       if (cfgMultCorrelationsMask & aod::cfmultset::MultNTracksGlobal)
-        multAxes.emplace_back(100, 0, 1000, "Nch Global");
+        multAxes.emplace_back(axisMultCorrMult, "Nch Global");
+      if (cfgMultCorrelationsMask & aod::cfmultset::CentFT0M)
+        multAxes.emplace_back(axisMultCorrCent, "FT0M centrality");
       registry.add("multCorrelations", "Multiplicity correlations", {HistType::kTHnSparseF, multAxes});
     }
     registry.add("multiplicity", "event multiplicity", {HistType::kTH1F, {{1000, 0, 100, "/multiplicity/centrality"}}});
@@ -275,7 +287,7 @@ struct CorrelationTask {
 
     if (!cfgEfficiencyAssociated.value.empty())
       efficiencyAssociatedCache.reserve(512);
-    if (doprocessMCEfficiency2Prong || doprocessMCEfficiency2ProngML) {
+    if (doprocessMCEfficiency2Prong || doprocessMCEfficiency2ProngML || doprocessMCReflection2ProngML) {
       p2indexCache.reserve(16);
       if (cfgMcTriggerPDGs->empty())
         LOGF(fatal, "At least one PDG code in {} is to be selected to process 2-prong efficiency.", cfgMcTriggerPDGs.name);
@@ -430,6 +442,17 @@ struct CorrelationTask {
   bool checkObject(TTrack& track)
   {
     if constexpr (step <= CorrelationContainer::kCFStepAnaTopology) {
+      // If using MC trigger PDGs, allow ONLY those PDGs to bypass isPhysicalPrimary
+      if (!cfgMcTriggerPDGs->empty()) {
+        // track has pdgCode in this compilation branch (you only call checkObject where that is true)
+        const bool isWantedTrigger =
+          std::find(cfgMcTriggerPDGs->begin(), cfgMcTriggerPDGs->end(), track.pdgCode()) != cfgMcTriggerPDGs->end();
+        if (isWantedTrigger) {
+          return true; // allow phi, K*, etc. even if not physical primary
+        }
+        // For everything else keep original definition
+        return track.isPhysicalPrimary();
+      }
       return track.isPhysicalPrimary();
     } else if constexpr (step == CorrelationContainer::kCFStepTrackedOnlyPrim) {
       return track.isPhysicalPrimary() && (track.flags() & aod::cfmcparticle::kReconstructed);
@@ -547,7 +570,7 @@ struct CorrelationTask {
       }
 
       if constexpr (std::experimental::is_detected<HasMcDecay, typename TTracks1::iterator>::value) {
-        if (((track1.mcDecay() != aod::cf2prongtrack::D0ToPiK) && (track1.mcDecay() != aod::cf2prongtrack::D0barToKPi)) || (track1.decay() & aod::cf2prongmcpart::Prompt) == 0)
+        if (((track1.mcDecay() != aod::cf2prongtrack::D0ToPiK) && (track1.mcDecay() != aod::cf2prongtrack::D0barToKPiExclusive)) || (track1.decay() & aod::cf2prongmcpart::Prompt) == 0)
           continue;
       } else if constexpr (std::experimental::is_detected<HasDecay, typename TTracks1::iterator>::value) {
         if (cfgDecayParticleMask != 0 && (cfgDecayParticleMask & (1u << static_cast<uint32_t>(track1.decay()))) == 0u) {
@@ -630,7 +653,7 @@ struct CorrelationTask {
 
         // If decay attributes are found for the second track/particle, we assume 2p-2p correlation
         if constexpr (std::experimental::is_detected<HasMcDecay, typename TTracks2::iterator>::value) {
-          if ((((track2.mcDecay()) != aod::cf2prongtrack::D0ToPiK) && ((track2.mcDecay()) != aod::cf2prongtrack::D0barToKPi)) || (track2.decay() & aod::cf2prongmcpart::Prompt) == 0)
+          if ((((track2.mcDecay()) != aod::cf2prongtrack::D0ToPiK) && ((track2.mcDecay()) != aod::cf2prongtrack::D0barToKPiExclusive)) || (track2.decay() & aod::cf2prongmcpart::Prompt) == 0)
             continue;
         } else if constexpr (std::experimental::is_detected<HasDecay, typename TTracks2::iterator>::value) {
           if (cfgDecayParticleMask != 0 && (cfgDecayParticleMask & (1u << static_cast<uint32_t>(track2.decay()))) == 0u) {
@@ -1141,7 +1164,7 @@ struct CorrelationTask {
   }
   PROCESS_SWITCH(CorrelationTask, processMCEfficiency, "MC: Extract efficiencies", false);
 
-  template <class p2type>
+  template <bool reflectionSpec, class p2type>
   void processMCEfficiency2ProngT(soa::Filtered<aod::CFMcCollisions>::iterator const& mcCollision, soa::Join<aod::CFMcParticles, aod::CF2ProngMcParts> const& mcParticles, soa::SmallGroups<aod::CFCollisionsWithLabel> const& collisions, aod::CFTracksWithLabel const&, p2type const& p2tracks, Preslice<p2type>& perCollision2Prong)
   {
     auto multiplicity = mcCollision.multiplicity();
@@ -1157,11 +1180,12 @@ struct CorrelationTask {
     p2indexCache.clear();
     for (const auto& mcParticle : mcParticles) {
       if (std::find(cfgMcTriggerPDGs->begin(), cfgMcTriggerPDGs->end(), mcParticle.pdgCode()) != cfgMcTriggerPDGs->end()) {
-        if (((mcParticle.mcDecay() != aod::cf2prongtrack::D0ToPiK) && (mcParticle.mcDecay() != aod::cf2prongtrack::D0barToKPi)) || (mcParticle.decay() & aod::cf2prongmcpart::Prompt) == 0)
+        if (((mcParticle.mcDecay() != aod::cf2prongtrack::D0ToPiK) && (mcParticle.mcDecay() != aod::cf2prongtrack::D0barToKPiExclusive)) || (mcParticle.decay() & aod::cf2prongmcpart::Prompt) == 0)
           continue; // wrong decay channel
         if (mcParticle.cfParticleDaugh0Id() < 0 && mcParticle.cfParticleDaugh1Id() < 0)
           continue; // daughters not found
-        same->getTrackHistEfficiency()->Fill(CorrelationContainer::MC, mcParticle.eta(), mcParticle.pt(), 4, multiplicity, mcCollision.posZ());
+        if constexpr (!reflectionSpec)
+          same->getTrackHistEfficiency()->Fill(CorrelationContainer::MC, mcParticle.eta(), mcParticle.pt(), 4, multiplicity, mcCollision.posZ());
         p2indexCache.push_back(mcParticle.globalIndex());
       }
     }
@@ -1169,14 +1193,17 @@ struct CorrelationTask {
       auto grouped2ProngTracks = p2tracks.sliceBy(perCollision2Prong, collision.globalIndex());
 
       for (const auto& p2track : grouped2ProngTracks) {
-        if (cfgDecayParticleMask != 0 && (cfgDecayParticleMask & (1u << static_cast<uint32_t>(p2track.decay()))) == 0u)
-          continue;
+        if constexpr (!reflectionSpec) {
+          if (cfgDecayParticleMask != 0 && (cfgDecayParticleMask & (1u << static_cast<uint32_t>(p2track.decay()))) == 0u)
+            continue;
+        }
         // Check if the mc particles of the prongs are found.
         if constexpr (std::experimental::is_detected<HasMlProbD0, typename p2type::iterator>::value) {
           if (!passMLScore(p2track))
             continue;
         }
-        same->getTrackHistEfficiency()->Fill(CorrelationContainer::RecoAll, p2track.eta(), p2track.pt(), 4, multiplicity, mcCollision.posZ());
+        if constexpr (!reflectionSpec)
+          same->getTrackHistEfficiency()->Fill(CorrelationContainer::RecoAll, p2track.eta(), p2track.pt(), 4, multiplicity, mcCollision.posZ());
         auto fillMC2p = [&](const aod::CFTracksWithLabel::iterator& p) -> bool {
           if (!p.has_cfMCParticle())
             return false;
@@ -1187,7 +1214,14 @@ struct CorrelationTask {
           if (m == p2indexCache.end())
             return false;
           const auto& mcParticle = mcParticles.iteratorAt(*m - mcParticles.begin().globalIndex());
-          same->getTrackHistEfficiency()->Fill(CorrelationContainer::RecoPrimaries, mcParticle.eta(), mcParticle.pt(), 4, multiplicity, mcCollision.posZ());
+          if constexpr (!reflectionSpec) {
+            same->getTrackHistEfficiency()->Fill(CorrelationContainer::RecoPrimaries, mcParticle.eta(), mcParticle.pt(), 4, multiplicity, mcCollision.posZ());
+          } else {
+            if (mcParticle.mcDecay() == p2track.decay())
+              registry.fill(HIST("invMassSignal"), p2track.invMass(), p2track.pt(), multiplicity);
+            else // one particle may be filled into both histograms through duplicates
+              registry.fill(HIST("invMassReflected"), p2track.invMass(), p2track.pt(), multiplicity);
+          }
           return true;
         };
         if (p2track.has_cfTrackProng0()) {
@@ -1201,7 +1235,8 @@ struct CorrelationTask {
         }
 
         // fake track
-        same->getTrackHistEfficiency()->Fill(CorrelationContainer::Fake, p2track.eta(), p2track.pt(), 4, multiplicity, mcCollision.posZ());
+        if constexpr (!reflectionSpec)
+          same->getTrackHistEfficiency()->Fill(CorrelationContainer::Fake, p2track.eta(), p2track.pt(), 4, multiplicity, mcCollision.posZ());
       }
     }
   }
@@ -1209,16 +1244,22 @@ struct CorrelationTask {
   Preslice<aod::CF2ProngTracks> perCollision2Prong = aod::cftrack::cfCollisionId;
   void processMCEfficiency2Prong(soa::Filtered<aod::CFMcCollisions>::iterator const& mcCollision, soa::Join<aod::CFMcParticles, aod::CF2ProngMcParts> const& mcParticles, soa::SmallGroups<aod::CFCollisionsWithLabel> const& collisions, aod::CFTracksWithLabel const& tracks, aod::CF2ProngTracks const& p2tracks)
   {
-    processMCEfficiency2ProngT(mcCollision, mcParticles, collisions, tracks, p2tracks, perCollision2Prong);
+    processMCEfficiency2ProngT<false>(mcCollision, mcParticles, collisions, tracks, p2tracks, perCollision2Prong);
   }
   PROCESS_SWITCH(CorrelationTask, processMCEfficiency2Prong, "MC: Extract efficiencies for 2-prong particles", false);
 
   Preslice<soa::Join<aod::CF2ProngTracks, aod::CF2ProngTrackmls>> perCollision2ProngML = aod::cftrack::cfCollisionId;
   void processMCEfficiency2ProngML(soa::Filtered<aod::CFMcCollisions>::iterator const& mcCollision, soa::Join<aod::CFMcParticles, aod::CF2ProngMcParts> const& mcParticles, soa::SmallGroups<aod::CFCollisionsWithLabel> const& collisions, aod::CFTracksWithLabel const& tracks, soa::Join<aod::CF2ProngTracks, aod::CF2ProngTrackmls> const& p2tracks)
   {
-    processMCEfficiency2ProngT(mcCollision, mcParticles, collisions, tracks, p2tracks, perCollision2ProngML);
+    processMCEfficiency2ProngT<false>(mcCollision, mcParticles, collisions, tracks, p2tracks, perCollision2ProngML);
   }
   PROCESS_SWITCH(CorrelationTask, processMCEfficiency2ProngML, "MC: Extract efficiencies for 2-prong particles with ML scores", false);
+
+  void processMCReflection2ProngML(soa::Filtered<aod::CFMcCollisions>::iterator const& mcCollision, soa::Join<aod::CFMcParticles, aod::CF2ProngMcParts> const& mcParticles, soa::SmallGroups<aod::CFCollisionsWithLabel> const& collisions, aod::CFTracksWithLabel const& tracks, soa::Join<aod::CF2ProngTracks, aod::CF2ProngTrackmls> const& p2tracks)
+  {
+    processMCEfficiency2ProngT<true>(mcCollision, mcParticles, collisions, tracks, p2tracks, perCollision2ProngML);
+  }
+  PROCESS_SWITCH(CorrelationTask, processMCReflection2ProngML, "MC: Extract reflection distributions for 2-prong particles with ML scores", false);
 
   template <class Particles1, class Particles2>
   void processMCSameDerivedT(soa::Filtered<aod::CFMcCollisions>::iterator const& mcCollision, Particles1 const& mcParticles1, Particles2 const& mcParticles2, soa::SmallGroups<aod::CFCollisionsWithLabel> const& collisions)
